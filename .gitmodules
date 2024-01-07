@@ -1,0 +1,6 @@
+[submodule "third_party/MLApp"]
+	path = third_party/MLApp
+	url = https://github.com/ourfor/MLApp.git
+[submodule "demo/MLApp"]
+	path = demo/MLApp
+	url = https://github.com/ourfor/MLApp.git
