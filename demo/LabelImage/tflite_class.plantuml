@@ -1,0 +1,20 @@
+@startuml
+class FlatBufferModel {
++ (instancetype)BuildFromFile(...)
++ (instancetype)BuildFromModel(...)
+}
+
+struct Model {
++ (uint32_t)version()
++ (Vector)operator_codes()
++ (Vector)subgraphs()
++ (Vector)buffers()
+}
+
+class InterpreterBuilder {
+- Model* model_
+}
+
+InterpreterBuilder <|-- Model
+FlatBufferModel <|-- Model
+@enduml
