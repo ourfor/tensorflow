@@ -1,0 +1,641 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "label_image.cc",
+			"settings":
+			{
+				"buffer_size": 20170,
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "/Users/ourfor/Code/ML/tensorflow/tensorflow/lite/optional_debug_tools.cc",
+			"settings":
+			{
+				"buffer_size": 23892,
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "/Users/ourfor/Library/Application Support/Sublime Text/Packages/User/bazel.sublime-build",
+			"settings":
+			{
+				"buffer_size": 90,
+				"encoding": "UTF-8",
+				"line_ending": "Unix",
+				"name": "untitled.sublime-build"
+			},
+			"undo_stack":
+			[
+				[
+					1,
+					1,
+					"insert_snippet",
+					{
+						"contents": "{\n\t\"shell_cmd\": \"${0:make}\"\n}\n"
+					},
+					"AQAAAAAAAAAAAAAAGQAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					2,
+					1,
+					"left_delete",
+					null,
+					"AQAAABEAAAAAAAAAEQAAAAAAAAAEAAAAbWFrZQ",
+					"AQAAAAAAAAABAAAAEQAAAAAAAAAVAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					3,
+					1,
+					"paste",
+					null,
+					"AQAAABEAAAAAAAAAVgAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAEQAAAAAAAAARAAAAAAAAAAAAAAAAAPC/"
+				]
+			]
+		},
+		{
+			"file": "label-image.sublime-project",
+			"settings":
+			{
+				"buffer_size": 1720,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+				[
+					1,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AwAAAGoAAAAAAAAAawAAAAAAAAAAAAAAawAAAAAAAABsAAAAAAAAAAAAAABsAAAAAAAAAG0AAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAagAAAAAAAABqAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					2,
+					1,
+					"insert_snippet",
+					{
+						"contents": "{\n\t\"type\": \"lldb\",\n\t\"request\": \"launch\",\n\t\"name\": \"${2:Launch}\",\n\t\"program\": \"\\${folder}/${1:<program>}\",\n\t\"args\": [],\n\t\"cwd\": \"\\${folder}\"\n},"
+					},
+					"AQAAAG0AAAAAAAAA/QAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAbQAAAAAAAABtAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					20,
+					1,
+					"left_delete",
+					null,
+					"AQAAAAAAAAAAAAAAAAAAAAAAAAADAQAAewoJImZvbGRlcnMiOgoJWwoJCXsKCQkJInBhdGgiOiAiL1VzZXJzL291cmZvci9Db2RlL01ML3RlbnNvcmZsb3ciLAoJCX0KCV0sCgkiZGVidWdnZXJfY29uZmlndXJhdGlvbnMiOgoJWwoJCXsKCQkJInR5cGUiOiAibGxkYiIsCgkJCSJyZXF1ZXN0IjogImxhdW5jaCIsCgkJCSJuYW1lIjogIkxhdW5jaCIsCgkJCSJwcm9ncmFtIjogIiR7Zm9sZGVyfS88cHJvZ3JhbT4iLAoJCQkiYXJncyI6IFtdLAoJCQkiY3dkIjogIiR7Zm9sZGVyfSIKCQl9LAoJXSwKfQ",
+					"AQAAAAAAAAABAAAAAwEAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					21,
+					1,
+					"paste",
+					null,
+					"AQAAAAAAAAAAAAAAiwUAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					24,
+					1,
+					"paste",
+					null,
+					"AgAAACEAAAAAAAAAQQAAAAAAAAAAAAAAQQAAAAAAAABBAAAAAAAAACMAAABDOlxcVXNlcnNcXERhcndpblxcQ29kZVxcdGVuc29yZmxvdw",
+					"AQAAAAAAAAABAAAAIQAAAAAAAABEAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					34,
+					1,
+					"paste",
+					null,
+					"AgAAALYDAAAAAAAAvAMAAAAAAAAAAAAAvAMAAAAAAAC8AwAAAAAAAA8AAAB3b3Jrc3BhY2VGb2xkZXI",
+					"AQAAAAAAAAABAAAAtgMAAAAAAADFAwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					35,
+					1,
+					"insert",
+					{
+						"characters": "s"
+					},
+					"AQAAALwDAAAAAAAAvQMAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAvAMAAAAAAAC8AwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					50,
+					1,
+					"left_delete",
+					null,
+					"AQAAAH0FAAAAAAAAfQUAAAAAAAABAAAALA",
+					"AQAAAAAAAAABAAAAfgUAAAAAAAB+BQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					53,
+					1,
+					"paste",
+					null,
+					"AgAAAEwAAAAAAAAATQQAAAAAAAAAAAAATQQAAAAAAABNBAAAAAAAADEFAAAJImRlYnVnZ2VyX2NvbmZpZ3VyYXRpb25zIjoKCVsKCQl7CgkJCSJ0eXBlIjogImxsZGIiLAoJCQkicmVxdWVzdCI6ICJsYXVuY2giLAoJCQkibmFtZSI6ICJMYXVuY2giLAoJCQkicHJvZ3JhbSI6ICIke2ZvbGRlcn0vYmF6ZWwtYmluL3RlbnNvcmZsb3cvbGl0ZS9leGFtcGxlcy9sYWJlbF9pbWFnZS9sYWJlbF9pbWFnZSIsCgkJCSJhcmdzIjogWwoJCQkJIi0tdGZsaXRlX21vZGVsIiwKICAgICAgICAgICAgICAgICIke2ZvbGRlcn0vZGVtby9MYWJlbEltYWdlL21vYmlsZW5ldF92MV8xLjBfMjI0LnRmbGl0ZSIsCiAgICAgICAgICAgICAgICAiLS1sYWJlbHMiLAogICAgICAgICAgICAgICAgIiR7Zm9sZGVyfS9kZW1vL0xhYmVsSW1hZ2UvbGFiZWxzLnR4dCIsCiAgICAgICAgICAgICAgICAiLS1pbWFnZSIsCiAgICAgICAgICAgICAgICAiJHtmb2xkZXJ9L2RlbW8vTGFiZWxJbWFnZS9ncmFjZV9ob3BwZXIuYm1wIiwKICAgICAgICAgICAgICAgICItLXZlcmJvc2UiLAogICAgICAgICAgICAgICAgIjEiCgkJCV0sCgkJCSJjd2QiOiAiJHtmb2xkZXJ9IgoJCX0sCgkgICAgewoJICAgICAgICAibmFtZSI6ICIobGxkYikgUmVtb3RlIExhdW5jaCIsCgkgICAgICAgICJ0eXBlIjogImxsZGIiLAoJICAgICAgICAicmVxdWVzdCI6ICJsYXVuY2giLAoJICAgICAgICAiaW5pdENvbW1hbmRzIjogWwoJICAgICAgICAgICAgInBsYXRmb3JtIHNlbGVjdCByZW1vdGUtbGludXgiLAoJICAgICAgICAgICAgInBsYXRmb3JtIGNvbm5lY3QgY29ubmVjdDovLzE3Mi4yNi4xNTEuMjA6ODg4OCIsCgkgICAgICAgICAgICAic2V0dGluZ3Mgc2V0IHRhcmdldC5pbmhlcml0LWVudiBmYWxzZSIsCgkgICAgICAgIF0sCgkgICAgICAgICJwcm9ncmFtIjogIiR7Zm9sZGVyc30vYmF6ZWwtYmluL3RlbnNvcmZsb3cvbGl0ZS9leGFtcGxlcy9sYWJlbF9pbWFnZS9sYWJlbF9pbWFnZSIsCgkgICAgICAgICJhcmdzIjogWwoJCQkJIi0tdGZsaXRlX21vZGVsIiwKICAgICAgICAgICAgICAgICIke2ZvbGRlcn0vZGVtby9MYWJlbEltYWdlL21vYmlsZW5ldF92MV8xLjBfMjI0LnRmbGl0ZSIsCiAgICAgICAgICAgICAgICAiLS1sYWJlbHMiLAogICAgICAgICAgICAgICAgIiR7Zm9sZGVyfS9kZW1vL0xhYmVsSW1hZ2UvbGFiZWxzLnR4dCIsCiAgICAgICAgICAgICAgICAiLS1pbWFnZSIsCiAgICAgICAgICAgICAgICAiJHtmb2xkZXJ9L2RlbW8vTGFiZWxJbWFnZS9ncmFjZV9ob3BwZXIuYm1wIiwKICAgICAgICAgICAgICAgICItLXZlcmJvc2UiLAogICAgICAgICAgICAgICAgIjEiCgkgICAgICAgIF0sCgkgICAgICAgICJjd2QiOiAiJHtmb2xkZXJ9IgogICAgCX0KCV0",
+					"AQAAAAAAAAABAAAATAAAAAAAAAB9BQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					58,
+					1,
+					"paste",
+					null,
+					"AgAAAHwDAAAAAAAAtgMAAAAAAAAAAAAAtgMAAAAAAAC2AwAAAAAAAAQAAAB0ZXN0",
+					"AQAAAAAAAAABAAAAfAMAAAAAAACAAwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					63,
+					1,
+					"paste",
+					null,
+					"AgAAAKICAAAAAAAA3AIAAAAAAAAAAAAA3AIAAAAAAADcAgAAAAAAAAQAAAB0ZXN0",
+					"AQAAAAAAAAABAAAAogIAAAAAAACmAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					68,
+					1,
+					"paste",
+					null,
+					"AgAAAMkBAAAAAAAAAwIAAAAAAAAAAAAAAwIAAAAAAAADAgAAAAAAAAQAAAB0ZXN0",
+					"AQAAAAAAAAABAAAAyQEAAAAAAADNAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					71,
+					1,
+					"paste",
+					null,
+					"AgAAALAAAAAAAAAA9QAAAAAAAAAAAAAA9QAAAAAAAAD1AAAAAAAAACYAAABjbGFuZysrIC1zdGQ9YysrMTQgLWcgbWFpbi5jcHAgLW8gdGVzdA",
+					"AQAAAAAAAAABAAAAsAAAAAAAAADWAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					74,
+					1,
+					"insert",
+					{
+						"characters": "\t"
+					},
+					"AQAAAEwAAAAAAAAATQAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAATAAAAAAAAABMAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					93,
+					1,
+					"paste",
+					null,
+					"AgAAANkBAAAAAAAA+QEAAAAAAAAAAAAA+QEAAAAAAAD5AQAAAAAAAA8AAAAke3Byb2plY3RfcGF0aH0",
+					"AQAAAAAAAAABAAAA6AEAAAAAAADZAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					96,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AgAAAFMCAAAAAAAAVAIAAAAAAAAAAAAAVAIAAAAAAABXAgAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAUwIAAAAAAABTAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					97,
+					1,
+					"paste",
+					null,
+					"AQAAAFcCAAAAAAAAowMAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAVwIAAAAAAABXAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					100,
+					1,
+					"insert",
+					{
+						"characters": "\t\t\t"
+					},
+					"AwAAAKEDAAAAAAAAogMAAAAAAAAAAAAAogMAAAAAAACjAwAAAAAAAAAAAACjAwAAAAAAAKQDAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAoQMAAAAAAAChAwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					103,
+					3,
+					"left_delete",
+					null,
+					"AwAAAFkCAAAAAAAAWQIAAAAAAAABAAAACVgCAAAAAAAAWAIAAAAAAAABAAAACVcCAAAAAAAAVwIAAAAAAAABAAAACQ",
+					"AQAAAAAAAAABAAAAWgIAAAAAAABaAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					109,
+					1,
+					"paste",
+					null,
+					"AgAAAIgCAAAAAAAAqAIAAAAAAAAAAAAAqAIAAAAAAACoAgAAAAAAAAkAAAAke2ZvbGRlcn0",
+					"AQAAAAAAAAABAAAAkQIAAAAAAACIAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					112,
+					1,
+					"paste",
+					null,
+					"AgAAAAQDAAAAAAAAJAMAAAAAAAAAAAAAJAMAAAAAAAAkAwAAAAAAAAkAAAAke2ZvbGRlcn0",
+					"AQAAAAAAAAABAAAADQMAAAAAAAAEAwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					115,
+					1,
+					"paste",
+					null,
+					"AgAAAG4DAAAAAAAAjgMAAAAAAAAAAAAAjgMAAAAAAACOAwAAAAAAAAkAAAAke2ZvbGRlcn0",
+					"AQAAAAAAAAABAAAAdwMAAAAAAABuAwAAAAAAAAAAAAAAAPC/"
+				]
+			]
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"package",
+				"Package Control: Install Package"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"packa",
+				"Preferences: Browse Packages"
+			],
+			[
+				"instal",
+				"Install Package Control"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 334.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/ourfor/Code/ML/tensorflow"
+	],
+	"file_history":
+	[
+		"/Users/ourfor/Downloads/tflite/mobilenet_v1_1.0_224.json",
+		"/Users/ourfor/Downloads/GTA5steamPJBD_V1/使用说明.txt",
+		"/Applications/CrossOver.app/Contents/Resources/zh_CN.lproj/MainMenu.strings",
+		"/Users/ourfor/Downloads/exported.h",
+		"/Users/ourfor/Downloads/SideStore.conf",
+		"/Users/ourfor/Downloads/Galaxy_S23_Plus/00_README.txt",
+		"/Users/ourfor/Documents/个人文档/PPT/nn-Meter.txt",
+		"/Users/ourfor/Tmp/BetterDisplay",
+		"/Users/ourfor/Downloads/bin-modify.txt",
+		"/Users/ourfor/Downloads/registration.macosx.hopperLicense",
+		"/Users/ourfor/Downloads/UPDF.BinExport",
+		"/Users/ourfor/Code/AIHelper/src/http/wireguard.conf",
+		"/Users/ourfor/Downloads/config.json",
+		"/Users/ourfor/Downloads/datasets/alexnets.jsonl",
+		"/Users/ourfor/Downloads/weibiaoti-_huabanfuben.svg",
+		"/Users/ourfor/Downloads/subscribe.txt",
+		"/Users/ourfor/Downloads/intro.ipynb",
+		"/Users/ourfor/Downloads/%E7%B3%96%E5%BF%83Vlog-013519.mobileconfig",
+		"/Users/ourfor/Downloads/2023noota.mobileconfig",
+		"/Users/ourfor/Downloads/mnist_network_weight.npy",
+		"/Users/ourfor/Code/Game/Game/Resource/Setting/WordTest.json",
+		"/Users/ourfor/Downloads/ids.txt",
+		"/Users/ourfor/Downloads/cifar-10/trainLabels.csv",
+		"/Users/ourfor/Downloads/stream.m3u",
+		"/Users/ourfor/Downloads/仲夏夜之梦 (1999) - 1080p.Eng.Chs.srt",
+		"/Users/ourfor/a.srt",
+		"/Users/ourfor/Downloads/随手拍2.fcpxmld/Info.fcpxml",
+		"/Users/ourfor/Downloads/测试_副本.fcpxmld/Info.fcpxml",
+		"/Users/ourfor/Code/Test/asset/smoba/银翎春语-杨玉环_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/瑶-时之祈愿壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/仙境爱丽丝·妲己_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/孙尚香 水果甜心壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/青丘·九尾-妲己_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/偶像歌手-王昭君_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/娜可露露-前尘镜壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/露娜·一生所爱_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/貂蝉-仲夏夜之梦壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/貂蝉-幻阙歌_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/妲己-女仆咖啡_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/嫦娥-拒霜思壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/蔡文姬-花朝如约壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/安琪拉-心灵骇客_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/艾琳-奇遇舞章壁纸_1920x1440.jpg",
+		"/Users/ourfor/Code/Test/asset/smoba/阿轲-节奏热浪_1920x1440.jpg",
+		"/Users/ourfor/Code/mock/segment.json",
+		"/Users/ourfor/Downloads/test.cpp",
+		"/Users/ourfor/Downloads/hekate_ipl.ini",
+		"/Users/ourfor/Code/TampermonkeyScript/VIPPlayer.js",
+		"/Users/ourfor/Library/Application Support/abnerworks.Typora/themes/newsprint.css",
+		"/Users/ourfor/Code/Test/menu_1.json",
+		"/Users/ourfor/Code/Test/menu_0.json",
+		"/Users/ourfor/Code/Test/menu1.json",
+		"/Users/ourfor/Downloads/_E7_A0_B4_E8_A7_A3_E8_A1_A5_E4_B8_81.zip/Scripts",
+		"/Users/ourfor/Documents/casual.txt",
+		"/Users/ourfor/Code/Cert/RootCA.pem",
+		"/Users/ourfor/Code/Cert/RootCA.crt",
+		"/Users/ourfor/Code/Cert/mb3admin.com.crt",
+		"/Users/ourfor/Code/Cert/mb3admin.com.key",
+		"/Users/ourfor/Downloads/RootCA.crt",
+		"/Users/ourfor/Downloads/INFUSE 6 PRO.cs5",
+		"/Users/ourfor/Downloads/INFUSE 6 PRO.hcc",
+		"/Users/ourfor/Documents/tellkeep.ml_cloudflare.pem.key",
+		"/Users/ourfor/Documents/tellkeep.ml_cloudflare.pem"
+	],
+	"find":
+	{
+		"height": 41.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"scrollbar_highlights": true,
+		"show_context": true,
+		"use_buffer2": true,
+		"use_gitignore": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "label_image.cc",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 20170,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								10633,
+								10633
+							],
+							[
+								10635,
+								10635
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 5496.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "/Users/ourfor/Code/ML/tensorflow/tensorflow/lite/optional_debug_tools.cc",
+					"selected": true,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 23892,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								12800,
+								12800
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 8951.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "/Users/ourfor/Library/Application Support/Sublime Text/Packages/User/bazel.sublime-build",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 90,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								17,
+								86
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/zzz A File Icon zzz/aliases/JSON (Sublime).sublime-syntax"
+						},
+						"translation.x": 88.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "label-image.sublime-project",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1720,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								910,
+								910
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/zzz A File Icon zzz/aliases/JSON (Sublime).sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 249.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"stack_multiselect": false,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 31.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 235.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "Packages/User/bazel.sublime-build",
+	"project": "label-image.sublime-project",
+	"replace":
+	{
+		"height": 58.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 321.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
