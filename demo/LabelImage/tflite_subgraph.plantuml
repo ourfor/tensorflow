@@ -1,0 +1,50 @@
+@startuml
+set namespaceSeparator ::
+skinparam defaultFontName "DankMono Nerd Font"
+skinparam defaultFontSize 14
+
+class Subgraph {
+- vector<int> inputs_;
+- vector<int> outputs_;
+- vector<int> execution_plan_
+- TfLiteContext *context_
+- vector<pair<node, registration>> nodes_and_registration_
++ TfLiteStatus AddNodeWithParameters(...)
++ TfLiteStatus AddTensors(...)
++ TfLiteStatus SetInputs(...)
++ TfLiteStatus Invoke()
+}
+
+struct TfLiteNode {
++ TfLiteIntArray* inputs;
++ TfLiteIntArray* outputs;
+}
+
+struct TfLiteContext {
++ size_t tensors_size
++ TfLiteTensor* tensors;
+}
+
+struct std::pair {
++ TfLiteNode* first
++ TfLiteRegistration* second
+}
+
+struct TfLiteRegistration {
++ int version
++ int32_t builtin_code
++ void* (*init)(TfLiteContext* context, const char* buffer, size_t length)
++ void (*free)(TfLiteContext* context, void* buffer)
++ TfLiteStatus (*prepare)(TfLiteContext* context, TfLiteNode* node)
++ TfLiteStatus (*invoke)(TfLiteContext* context, TfLiteNode* node)
+}
+
+TfLiteContext -o Subgraph
+TfLiteNode -o std::pair
+std::pair o- TfLiteRegistration
+Subgraph "1" o-- "0.." std::pair : 包含
+note bottom of TfLiteContext : 所有张量数据
+note top of TfLiteRegistration : 算子实现
+note top of TfLiteNode : 图节点输入输出依赖
+
+@enduml

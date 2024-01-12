@@ -1,7 +1,39 @@
 @startuml
+set namespaceSeparator ::
+skinparam defaultFontName "DankMono Nerd Font"
+skinparam defaultFontSize 14
+
 class FlatBufferModel {
+- Model* model_
+- unique_ptr<Allocation> allocation_
 + (instancetype)BuildFromFile(...)
 + (instancetype)BuildFromModel(...)
+}
+
+class BuiltinOpResolver {
+
+}
+
+protocol OpResolver {
++  TfLiteRegistration* FindOp(...)
++  void AddBuiltin(...)
++  void AddCustom(...)
++  void AddAll(...)
+}
+
+class BuiltinOpResolver {
+
+}
+
+class BuiltinOpResolverWithXNNPACK {
+
+}
+
+class Interpreter {
+- std::vector<Subgraph> subgraphs_
++ Subgraph& primary_subgraph()
++ Subgraph* subgraph(int subgraph_index)
++ TfLiteStatus Invoke();
 }
 
 struct Model {
@@ -13,8 +45,28 @@ struct Model {
 
 class InterpreterBuilder {
 - Model* model_
++ (instancetype)InterpreterBuilder(model, resolver, options)
++ void operator()(Interpreter *interpreter)
 }
 
-InterpreterBuilder <|-- Model
-FlatBufferModel <|-- Model
+Model -* FlatBufferModel: 持有
+FlatBufferModel "1" -- "1" OpResolver
+(FlatBufferModel, OpResolver) - InterpreterBuilder : 依赖
+InterpreterBuilder - Interpreter : 创建
+BuiltinOpResolverWithXNNPACK -|> OpResolver
+OpResolver <|- BuiltinOpResolver
+
+note as N1
+<color:#9b2293>const</color> char* model_path = "...";
+<color:#3a00a0>std::unique_ptr</color><<color:#1c454a>tflite::FlatBufferModel</color>> model;
+<color:#3a00a0>std::unique_ptr</color><<color:#1c454a>tflite::Interpreter</color>> interpreter;
+
+1. 从文件中读取模型
+model = <color:BlueViolet>tflite::FlatBufferModel::</color><color:#306e74>BuildFromFile</color>(model_path);
+
+2. 创建Interpreter
+<color:#1c454a>tflite::ops::builtin::</color>BuiltinOpResolver resolver;
+<color:#1c454a>tflite::</color><color:#306e74>InterpreterBuilder</color>(*model, resolver)(&interpreter);
+end note
+
 @enduml
