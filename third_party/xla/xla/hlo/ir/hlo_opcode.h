@@ -1,4 +1,4 @@
-/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ namespace xla {
   V(kDynamicReshape, "dynamic-reshape", kHloOpcodeIsVariadic)                  \
   V(kDynamicSlice, "dynamic-slice", kHloOpcodeIsVariadic)                      \
   V(kDynamicUpdateSlice, "dynamic-update-slice", kHloOpcodeIsVariadic)         \
+  V(kErf, "erf", 1)                                                            \
   V(kExp, "exponential", 1)                                                    \
   V(kExpm1, "exponential-minus-one", 1)                                        \
   V(kFft, "fft", 1)                                                            \
@@ -169,7 +170,8 @@ namespace xla {
   /* go/keep-sorted end */
 // LINT.ThenChange(../../mlir_hlo/mhlo/IR/hlo_ops.td)
 
-enum class HloOpcode {
+// Upto 256 opcodes. Increase the base type if/when needed.
+enum class HloOpcode : uint8_t {
 #define DECLARE_ENUM(enum_name, opcode_name, ...) enum_name,
   HLO_OPCODE_LIST(DECLARE_ENUM)
 #undef DECLARE_ENUM
@@ -226,6 +228,9 @@ inline constexpr uint32_t HloOpcodeCount() {
 #define HLO_XLIST_LENGTH(list) list(HLO_COUNT_ONE)
   return HLO_XLIST_LENGTH(HLO_OPCODE_LIST);
 }
+static_assert(HloOpcodeCount() < 256,
+              "HloOpcode is a uint8_t. You need to increase its size before "
+              "adding new op codes.");
 
 }  // namespace xla
 

@@ -1,4 +1,4 @@
-/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -172,7 +172,12 @@ message DebugOptions {
   // useful when accelerating structured sparsity.
   int32 xla_cpu_sparse_cuda_threads = 207;
 
-  // Allows xla to increase the output precision of floating point operations.
+  // Allows xla to increase the output precision of floating point operations
+  // and all floating-point conversions to be simplified, including those
+  // that affect the numerics. The `FloatNormalization` pass inserts many
+  // `f32 -> bf16 -> f32` conversion pairs. These are not removed by the
+  // `AlgebraicSimplifier`, as that will only simplify conversions that are
+  // no-ops, e.g. `bf16 -> f32 -> bf16`. Removing these improves accuracy.
   bool xla_allow_excess_precision = 122;
 
   // Crashes the program when any kind of verification fails, instead of just
@@ -362,6 +367,7 @@ message DebugOptions {
   // Overrides normal multi-threaded compilation setting to use this many
   // threads. Setting to 0 (the default value) means no enforcement.
   int32 xla_gpu_force_compilation_parallelism = 147;
+  bool xla_gpu_enable_llvm_module_compilation_parallelism = 268;
 
   // Guarantees run-to-run determinism. At present, the HLO ops Scatter and
   // SelectAndScatter do not have deterministic XLA:GPU implementations.
@@ -445,6 +451,9 @@ message DebugOptions {
   // if `xla_gpu_enable_custom_fusion` set to true.
   string xla_gpu_enable_custom_fusions_re = 264;
 
+  // If true, use XLA runtime for XLA:GPU backend.
+  bool xla_gpu_enable_address_computation_fusion = 105;
+
   reserved 233;  // was xla_gpu_enable_gpu2_runtime
   reserved 234;  // was xla_gpu_enable_gpu2_hal
 
@@ -459,15 +468,18 @@ message DebugOptions {
   // Whether to use cuBLASLt for GEMMs on GPUs.
   bool xla_gpu_enable_cublaslt = 166;
 
-  // Commands are categorized into four types: FUSION represents regular fusion
-  // kernels. CUBLAS, CUDNN, and NCCL represent library calls.
+  // Commands are categorized into 5 types:
+  // FUSION represents regular fusion kernels.
+  // CUBLAS, CUDNN, and COLLECTIVES represent library calls.
+  // CONDITIONALS represents control flow.
   enum CommandBufferCmdType {
     INVALID = 0;
     FUSION = 1;
     CUBLAS = 2;
     CUDNN = 3;
-    NCCL = 4;
-    WHILE = 5;
+    COLLECTIVES = 4;
+    CONDITIONALS = 5;
+    CUSTOM_CALL = 6;
   }
 
   // Determine the types of commands that are recorded into command buffers.
@@ -504,12 +516,8 @@ message DebugOptions {
   // scratch), so this can be multiplied by quite a lot.
   int64 xla_gpu_redzone_padding_bytes = 228;
 
-  // Allows all floating-point conversions to be simplified, including those
-  // that affect the numerics. The `FloatNormalization` pass inserts many
-  // `f32 -> bf16 -> f32` conversion pairs. These are not removed by the
-  // `AlgebraicSimplifier`, as that will only simplify conversions that are
-  // no-ops, e.g. `bf16 -> f32 -> bf16`. Removing these improves accuracy.
-  bool xla_gpu_simplify_all_fp_conversions = 168;
+  // Deprecated. Use xla_allow_excess_precision instead.
+  bool xla_gpu_simplify_all_fp_conversions = 168 [deprecated = true];
 
   // An experimental option to force all layouts present in the
   // after-optimizations HLO to be descending, e.g.
@@ -665,7 +673,15 @@ message DebugOptions {
   // Enables currently disabled features within Triton for Hopper.
   bool xla_gpu_enable_triton_hopper = 266;
 
-  // Next id: 267
+  // Enable NCCL user buffers.
+  bool xla_gpu_enable_nccl_user_buffers = 267;
+
+  // If enabled, uses the libnvptxcompiler library to compile PTX to cuBIN.
+  bool xla_gpu_enable_libnvptxcompiler = 269;
+
+  bool xla_gpu_enable_dot_strength_reduction = 270;
+
+  // Next id: 271
 
   // Extra options to pass to the compilation backend (e.g. LLVM); specific
   // interpretation of these values is left to the backend.

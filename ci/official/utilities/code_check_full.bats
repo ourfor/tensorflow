@@ -301,9 +301,15 @@ EOF
 }
 
 @test "API compatibility test passes, ensuring no unexpected changes to the TF API" {
-    bazel $TFCI_BAZEL_BAZELRC_ARGS test $TFCI_BAZEL_COMMON_ARGS //tensorflow/tools/api/tests:api_compatibility_test
+    bazel test $TFCI_BAZEL_COMMON_ARGS //tensorflow/tools/api/tests:api_compatibility_test
     echo "You have to re-generate the TF API goldens and have the API changes reviewed."
     echo "Look at the instructions for ':api_compatibility_test -- --update_goldens=True'"
+}
+
+# See b/279852433 (internal).
+# TODO(b/279852433) Replace deps(//tensorflow/...) with deps(//...)
+@test "Verify that it's possible to query every TensorFlow target without BUILD errors" {
+    bazel query "deps(//tensorflow/...)" > /dev/null
 }
 
 teardown_file() {

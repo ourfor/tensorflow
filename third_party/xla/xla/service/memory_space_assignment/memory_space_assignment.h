@@ -1,4 +1,4 @@
-/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2019 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,6 +12,156 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
+
+/*
+Quick reference
+
+This section is meant as to be a quick reference for getting the gist of
+commonly used terminology in the code and logging. Please see the code for more
+details.
+
+General concepts
+
+  - Time: In MSA, time typically refers to an index into the flattened
+    instruction schedule.
+
+  - Cross-program prefetch: Cross-program prefetched tensors are copied from
+    memory to alternate the first time a program executes, like usual
+    prefetches. MSA keeps these buffers alive in alternate memory at the end of
+    the program, such that if the same program is executed again, these tensors
+    would not need to be prefetched again.
+
+Classes
+
+  - HloPosition (Hlo dataflow analysis concept): Identifies a tensor referenced
+    in an instruction's output. Defined by <instruction, shape index>.
+
+  - HloValue (Hlo dataflow analysis concept): The value of a tensor. Each
+    HloValue is represented by a collection of HloPositions. Exactly 1 of those
+    positions is the HloValue's defining position, i.e., the point in code where
+    the value is created/written. The rest of the positions pertain to read-only
+    uses of the value.
+    * Example: A tensor that is inserted in a Tuple has 2 HloPositions, one for
+      the instruction that creates the tensor, and one indexing into the Tuple
+      instruction result.
+    * The read-only positions of an HloValue should not be confused with
+      HloUses. Read-only positions are references to the HloValue in the output
+      of an instruction. Uses are references to an HloValue in the input of an
+      instruction.
+    * Dataflow analysis assigns HloValues for the instructions in computations
+      pertaining to while loops, conditionals, and call ops. However, it does
+      not assign HloValues to the computations pertaining to instructions with
+      "call" semantics (e.g., fusions, reduce, and custom-call) because those
+      computations are treated as black boxes.
+    * If a while loop does not modify an input tensor, that tensor will be
+      assigned 1 HloValue that lasts from its creation point through the while
+      loop.
+    * If a while loop modifies one of its input tensors, that tensor will
+      receive at least the following HloValues:
+      - An HloValue for the tensor's creation, with a use at the operand of the
+        while instruction.
+      - An HloValue with its defining position at the while body's parameter.
+      - An HloValue whose defining position is an instruction in the while body
+        that feeds the new tensor value to the body's ROOT instruction.
+      - An HloValue with its defining position at the while instruction's
+        result.
+
+  - HloBuffer (Hlo alias analysis concept): A memory container that holds one
+    or more HloValues that must alias. Typically, each HloValue corresponds to
+    1 HloBuffer; however, many exceptions exist. For example, tensors that are
+    modified by a while loop have their HloValues share an HloBuffer, for the
+    HloValues that come immediately before, during, and immediately after the
+    loop. HloBuffers are shared between HloValues wherever their is aliasing,
+    whether implicit by the nature of the instruction (e.g.,
+    dynamic-update-slice) or explicit (e.g., fusion input-output aliasing).
+
+  - BufferInterval (HeapSimulator concept): A BufferInterval is defined by a
+    buffer of a given size, with a defined lifetime. In MSA, the buffer
+    corresponds to an HloValue.
+
+  - AllocationValue: An AllocationValue is defined by an HloValue, and *one* of
+    its HloPositions.
+    * We do not create AllocationValues for non-trivial HloPositions, e.g., ones
+      defined by Tuple, GetTupleElement, and Bitcast instructions.
+    * The HloPosition used to define the AllocationValue is referred to as the
+      AllocationValue's defining position.
+      * Typically, this is also the defining position of the HloValue. However,
+        it may not be. For example, we would create an AllocationValue with an
+        HloPosition of a read-only while loop parameter, but the HloValue
+        corresponding to that HloPosition would have a different defining
+        position.
+    * The uses of an AllocationValue are limited to the direct uses of the
+      AllocationValue's defining position.
+    * An AllocationValue is associated with an AllocationSequence, describing
+      what to do with the underlying tensor, in memory, over the lifetime of the
+      AllocationValue.
+
+  - (Use) Segment: Each AllocationValue and its uses are separated into periods
+    of time called use segments. The first use segment is from the (inclusive)
+    time of the AllocationValue's defining position to its first use
+    (inclusive). The second use segment is from the first use (inclusive) to
+    the second use (inclusive), etc.
+
+  - AllocationRequest: A request to determine what to do with an
+    AllocationValue, in memory, during a use segment. It also contains
+    restrictions and preferences on what to do.
+    * A request results in updates to the AllocationValue's AllocationSequence.
+      It may add Allocations, or modify existing Allocations in the sequence.
+
+  - Allocation: A description of what to do with an AllocationValue in memory,
+    over a period of time.
+    * Base class of all Allocations.
+    * When an Allocation is used without being subclassed, it either represents
+      producing a tensor in a particular memory space, or pinning (keeping) a
+      tensor in a memory space in which it already exists.
+
+  - AllocationSequence: A sequential list of Allocations, explaining what to do
+    with an AllocationValue over its lifetime. Allocations in the sequence may
+    overlap.
+
+  - Copy Allocation: Instructions to copy an AllocationValue from one memory
+    space to another. Used for prefetching (default mem -> alt mem), and
+    eviction (alt mem -> default mem).
+    * A copy Allocation contains a copy_done_schedule_before_time. The buffer is
+      available for use at that schedule time, through the Allocation's
+      end_time.
+
+  - Sliced Copy Allocation: Similar to a Copy Allocation, except the memory is
+    copied in slices, in an effort to delay allocating memory in the destination
+    memory space, for as long as possible.
+
+  - Mirrored Allocation and Parent Allocation: R/W tensors passed to while loops
+    typically have at least 3 AllocationValues, 1 for the producer of the tensor
+    before the while loop, 1 for the while loop's body parameter, and 1 for the
+    result of the while loop. There are situations heading into a while loop, in
+    which the while loop input is both in alternate memory and default memory.
+    (For example, this could happen beause we want the buffer in alternate
+    memory for the while loop and default memory after the while loop, but we
+    don't have resources to evict the buffer after the while loop.) In those
+    cases, we use a mirrored allocation for the AllocationValue inside the
+    while loop, to mirror the allocation in default memory. We use a parent
+    allocation for the AllocationValue resulting from the while loop result.
+
+Useful logging and error messages
+
+  - Live range too long: The live range of a use segement is too long to for an
+    alternate memory no copy, i.e., its longer than we want to keep a buffer in
+    alternate memory wihtout being used.
+    * If the CostAnalysisPrefetchIntervalPicker is used, which is the default,
+      live range too long is governed by the picker's
+      max_overlap_to_mem_size_async_copy_ratio argument.
+
+  - Live range too short: The live range of a use segement is too short to
+    prefetch a buffer to alternate memory, according to some heuristic and not
+    based on limited copy resource.
+    * If the CostAnalysisPrefetchIntervalPicker is used, which is the default,
+      live range too long is governed by the picker's
+      min_overlap_to_async_copy_ratio argument.
+
+  - "Finding allocation for": Magical logging phrase indicating the point in
+    time where we are are trying to determine how to update an AllocationValue's
+    AllocationSequenece, for a particular use segment.
+*/
 
 #ifndef XLA_SERVICE_MEMORY_SPACE_ASSIGNMENT_MEMORY_SPACE_ASSIGNMENT_H_
 #define XLA_SERVICE_MEMORY_SPACE_ASSIGNMENT_MEMORY_SPACE_ASSIGNMENT_H_
@@ -32,6 +182,8 @@ limitations under the License.
 #include <variant>
 #include <vector>
 
+#include "xla/service/heap_simulator/allocation_block.h"
+
 // TODO(b/210891274): Use btree_map after build issue in Windows is resolved.
 #if defined(__GNUC__) || defined(__clang__)
 #include "absl/container/btree_map.h"
@@ -46,7 +198,7 @@ limitations under the License.
 #include "xla/hlo/utils/hlo_live_range.h"
 #include "xla/service/buffer_value.h"
 #include "xla/service/call_graph.h"
-#include "xla/service/heap_simulator.h"
+#include "xla/service/heap_simulator/heap_simulator.h"
 #include "xla/service/hlo.pb.h"
 #include "xla/service/hlo_alias_analysis.h"
 #include "xla/service/hlo_buffer.h"
@@ -977,7 +1129,9 @@ class MemorySpaceAssignment {
     SlicedCopyAllocation(
         const Allocation& prev_allocation, MemorySpace memory_space,
         std::vector<SliceDecision> slice_decisions_sorted_by_start_time,
-        int64_t copy_done_schedule_before_time, int64_t end_time);
+        int64_t copy_done_schedule_before_time, int64_t end_time,
+        const SlicedPrefetchOptions& sliced_prefetch_options,
+        absl::FunctionRef<Shape(const Shape&)> get_equivalent_s8_shape_fn);
 
     bool is_sliced_copy_allocation() const override { return true; }
 
@@ -1000,8 +1154,7 @@ class MemorySpaceAssignment {
     void AddDiffToAllSliceOffsets(int64_t diff);
 
     // Used to update offsets and start times after repacking.
-    void ImportRepackedSliceData(
-        const MemorySpaceAssignmentRepacker::SlicedAllocationData& data);
+    void ImportRepackedSliceData(const SlicedAllocationData& data);
 
     const std::vector<SliceDetail>& slice_details_sorted_by_start_time() const;
     std::vector<SliceDetail>& mutable_slice_details_sorted_by_start_time();
@@ -1029,6 +1182,8 @@ class MemorySpaceAssignment {
     //   sorted_segments_[i+j].copy.start_before_time
     std::vector<SliceDetail> slice_details_sorted_by_start_time_;
     HloInstruction* concat_ = nullptr;
+    const SlicedPrefetchOptions& sliced_prefetch_options_;
+    absl::FunctionRef<Shape(const Shape&)> get_equivalent_s8_shape_fn_;
   };
 
   // An allocation in the default memory space that mirrors another Allocation
@@ -1360,11 +1515,11 @@ class MemoryBoundednessBufferIntervalComparator
  private:
   // See the value returned by DescribeComparisonCriteria() for the meaning of
   // each tuple element.
-  using ComparisonTuple =
-      std::tuple<float, int64_t, int64_t, int64_t, int64_t, BufferValue::Id>;
+  using ComparisonTuple = std::tuple<int64_t, float, int64_t, int64_t, int64_t,
+                                     int64_t, BufferValue::Id>;
 
   ComparisonTuple GetTuple(const BufferInterval& buffer_interval);
-
+  int64_t GetLatestUseTime(const BufferInterval& buffer_interval);
   absl::flat_hash_map<const HloValue*, int64_t> buffer_to_latest_use_;
   const MemorySpaceAssignmentCostAnalysis& cost_analysis_;
   MemorySpaceAssignmentCostAnalysis::Cache* cost_analysis_cache_;
@@ -1403,88 +1558,6 @@ class DefaultCrossProgramPrefetchBufferIntervalComparator
   const HloLiveRange& hlo_live_range_;
 };
 
-// Filters prefetches by matching against multiple filters and overrides the
-// preferred prefetch time for matching prefetches by the provided override
-// strategy.
-class FilterUpdatePreferredPrefetch {
- public:
-  // Supported filters for prefetch filtering by operand size, instruction name,
-  // operand number and operand index matching.
-  enum class FilterType {
-    OP_SIZE_LTE,  // sting value: op_size_lte, filter value type: integer
-    OP_SIZE_GTE,  // sting value: op_size_gte, filter value type: integer
-    INSTRUCTION_NAME_EXACT,  // sting value: instruction_name_exact,
-                             // filter value type: string
-    OP_NUMBER_EXACT,         // sting value: op_number_exact,
-                             // filter value type: integer
-    OP_INDEX_EXACT  // sting value: op_index_exact, filter value type: string
-                    // (empty string for {}, 1 for {1} and 1#2 for {1,2})
-  };
-  // Strategies to compute new perferred prefetch time. Prefetch eagerness
-  // sets prefetch time to a time within the live-range depending on a value,
-  // e.g. 0.5 sets it exactly in the middle of the live-range. Put after
-  // instruction or put before instruction finds an instruction in the schedule
-  // and puts the preferred prefetch time before or after the found instruction.
-  enum class OverrideType {
-    PREFETCH_EAGERNESS,     // sting value: prefetch_eagerness,
-                            // override value type : float
-    PUT_AFTER_INSTRUCTION,  // sting value: put_after_instruction,
-                            // override value type: string
-    PUT_BEFORE_INSTRUCTION  // sting value: put_before_instruction,
-                            // override value type: string
-  };
-  std::vector<std::pair<FilterType, std::string>> filter_list_;
-  OverrideType override_type_;
-  std::string override_value_;
-
-  std::string ToString() const { return config_string_; }
-
-  static StatusOr<std::vector<FilterUpdatePreferredPrefetch>>
-  ParseFilterUpdatePreferredPrefetches(std::string config);
-
-  static StatusOr<bool> IsOpSizeGte(int64_t operand_size, std::string config);
-
-  static StatusOr<bool> IsOpSizeLte(int64_t operand_size, std::string config);
-
-  static StatusOr<bool> IsInstructionNameExact(
-      absl::string_view instruction_name, std::string config);
-
-  static StatusOr<bool> IsOpNumberExact(int64_t operand_number,
-                                        std::string config);
-
-  static StatusOr<bool> IsOpIndexExact(const ShapeIndex& operand_index,
-                                       std::string config);
-
-  StatusOr<std::optional<int64_t>> GetPrefetchByEagerness(
-      int64_t earliest_prefetch_time, int64_t latest_prefetch_time) const;
-
-  StatusOr<std::optional<int64_t>> GetPrefetchTimeAfterInstruction(
-      const absl::flat_hash_map<const xla::HloInstruction*,
-                                xla::HloLiveRange::LogicalTime>& schedule)
-      const;
-
-  StatusOr<std::optional<int64_t>> GetPrefetchTimeBeforeInstruction(
-      const absl::flat_hash_map<const xla::HloInstruction*,
-                                xla::HloLiveRange::LogicalTime>& schedule)
-      const;
-
- private:
-  std::string config_string_;
-  StatusOr<xla::HloLiveRange::LogicalTime> GetScheduleTimeFromInstructionName(
-      const absl::flat_hash_map<const xla::HloInstruction*,
-                                xla::HloLiveRange::LogicalTime>& schedule)
-      const;
-
-  static StatusOr<FilterType> ParseFilterType(std::string config);
-
-  static StatusOr<OverrideType> ParseOverrideType(std::string config);
-
-  static StatusOr<ShapeIndex> ParseOperandIndex(std::string config);
-
-  static StatusOr<FilterUpdatePreferredPrefetch>
-  ParseFilterUpdatePreferredPrefetch(std::string config);
-};
-
 // The different options to be passed to the Run() API.
 struct Options {
   // Backend-specific integer value that describes the alternate memory.
@@ -1509,6 +1582,8 @@ struct Options {
 
   // Size function for buffer values.
   BufferValue::SizeFunction size_fn;
+
+  std::function<Shape(const Shape&)> get_equivalent_s8_shape_fn;
 
   // This function can be used to prevent certain HloValues (e.g., based on
   // the opcode) to be placed on the alternate memory.
@@ -1657,8 +1732,8 @@ struct Options {
   float pipeline_overhead_window_size_mib = 0;
 
   // Config to filter prefetches and update preferred prefetch times for the
-  // filtered prefetches according to an update config.
-  std::vector<FilterUpdatePreferredPrefetch> filter_update_preferred_prefetches;
+  // filtered prefetches.
+  PreferredPrefetchOverrides preferred_prefetch_overrides;
 
   // Options for slicing prefetches into smaller asynchronously copied pieces.
   SlicedPrefetchOptions sliced_prefetch_options;
@@ -1675,6 +1750,10 @@ struct Options {
   // Option to always spill buffers from alternate memory to default memory
   // and prefetching back to alternate memory(if needed) just in time for use.
   bool always_spill_to_default_memory = false;
+
+  // Config to override alternate memory assignment sorting order for filtered
+  // buffers.
+  MsaSortOrderOverrides msa_sort_order_overrides;
 };
 
 // A struct representing an asynchronous copy with its logical start and end
@@ -2109,7 +2188,7 @@ class AlternateMemoryBestFitHeap
   void AllocateCrossProgramPrefetchBuffer(
       HloModule* module, const BufferInterval& prefetch_candidate);
 
-  HeapSimulator::Result<HloValue> Finish() override;
+  StatusOr<HeapSimulator::Result<HloValue>> Finish() override;
 
  protected:
   // Given a buffer interval, returns the colocated intervals. Unlike the
@@ -2145,8 +2224,7 @@ class AlternateMemoryBestFitHeap
  private:
   // We inherit AllocationBlock struct to attach the Allocation information to
   // make importing repacked offsets easier.
-  struct RepackAllocationBlock
-      : MemorySpaceAssignmentRepacker::AllocationBlock {
+  struct RepackAllocationBlock : AllocationBlock {
     MemorySpaceAssignment::Allocation* allocation;
   };
 
@@ -2184,6 +2262,7 @@ class AlternateMemoryBestFitHeap
     int64_t size;
     bool prefer_no_copy_alternate_mem_allocation;
     bool allow_no_copy_alternate_mem_allocation;
+    bool require_no_copy_alternate_mem_allocation;
     bool allow_prefetch;
     std::optional<int64_t> earliest_prefetch_time;
     std::optional<int64_t> preferred_prefetch_time;
@@ -2378,7 +2457,9 @@ class AlternateMemoryBestFitHeap
     kFailRequiresUncommit = 64,
     // For prefetching, indicates that all slices have the same start time, in
     // which case, we fallback to an unsliced solution.
-    kAllSlicesHaveTheSameStartTime = 128
+    kAllSlicesHaveTheSameStartTime = 128,
+    // There were conflicting preferred offsets.
+    kFailConflictingPreferredOffsets = 256
   };
 
   // Return true if the result belongs to a failure.
@@ -2447,7 +2528,7 @@ class AlternateMemoryBestFitHeap
   // All of the allocation values have a must-alias relationship with each
   // other. Returns either kSuccess if all of the sites could be placed in the
   // alternate memory or a bitwise OR of failure reasons why they couldn't
-  Result AllocateAllocationValues(
+  StatusOr<Result> AllocateAllocationValues(
       absl::Span<AllocationValue> allocation_values);
 
   // Finds an allocation for an allocation request for a segment (see the
@@ -2614,8 +2695,7 @@ class AlternateMemoryBestFitHeap
   // Exports the allocations for repacking and puts them into the vector in the
   // parameter.
   void ExportAllocationsForRepacking(
-      std::vector<MemorySpaceAssignmentRepacker::AllocationBlock*>&
-          allocations);
+      std::vector<AllocationBlock*>& allocations);
 
   // Update reserved scoped allocation size for instructions when their
   // operand/output has been allocated in alternate memory by invoking
@@ -2713,6 +2793,10 @@ class AlternateMemoryBestFitHeap
   const std::vector<const HloInstruction*>* GetRepeatedInstructionList(
       const HloInstruction* instruction) const;
 
+  // Returns true if the interval is pinned in the alternate memory. Buffers are
+  // pinned when their layout has the alternate memory space before MSA runs.
+  bool IsIntervalPinnedToAlternateMemory(const BufferInterval& interval) const;
+
   MemorySpaceAssignment::AllocationSequence* allocations_;
   const Options& options_;
   const HloAliasAnalysis& alias_analysis_;
@@ -2786,6 +2870,11 @@ class AlternateMemoryBestFitHeap
   std::string allocation_info_str_;
   std::string instruction_schedule_str_;
 };
+
+// Returns true if the options indicate that we there is a preferred slice
+// size.
+bool IsUniformSliceSizingEnabled(const SlicedPrefetchOptions& options);
+
 }  // namespace memory_space_assignment
 }  // namespace xla
 

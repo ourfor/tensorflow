@@ -1,4 +1,4 @@
-/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,30 +15,34 @@ limitations under the License.
 
 #include "xla/service/gpu/gpu_transfer_manager.h"
 
+#include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "absl/status/status.h"
 #include "llvm/IR/DataLayout.h"
 #include "xla/literal.h"
-#include "xla/literal_util.h"
 #include "xla/service/compiler.h"
+#include "xla/service/generic_transfer_manager.h"
+#include "xla/service/gpu/infeed_manager.h"
 #include "xla/service/gpu/outfeed_manager.h"
 #include "xla/service/gpu/target_constants.h"
+#include "xla/service/shaped_buffer.h"
+#include "xla/service/transfer_manager.h"
+#include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
-#include "xla/statusor.h"
 #include "xla/stream_executor/cuda/cuda_platform_id.h"
-#include "xla/stream_executor/host/host_platform_id.h"
-#include "xla/stream_executor/multi_platform_manager.h"
+#include "xla/stream_executor/device_memory.h"
+#include "xla/stream_executor/platform.h"
 #include "xla/stream_executor/rocm/rocm_platform_id.h"
 #include "xla/stream_executor/stream_executor.h"
-#include "xla/types.h"
 #include "xla/util.h"
 #include "tsl/platform/errors.h"
 #include "tsl/platform/logging.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -50,44 +54,42 @@ GpuTransferManager::GpuTransferManager(se::Platform::Id id,
                                        unsigned pointer_size)
     : GenericTransferManager(id, pointer_size) {}
 
-GpuTransferManager::~GpuTransferManager() {
-  if (pinned_chunk_se_) {
-    pinned_chunk_se_->HostMemoryDeallocate(pinned_chunk_);
-  }
-}
-
-Status GpuTransferManager::TransferLiteralToInfeed(
+absl::Status GpuTransferManager::TransferLiteralToInfeed(
     se::StreamExecutor* executor, const LiteralSlice& literal) {
   return gpu::GetOrCreateInfeedManager(executor)->TransferLiteralToInfeed(
       executor, literal);
 }
 
-Status GpuTransferManager::TransferLiteralFromOutfeed(
+absl::Status GpuTransferManager::TransferLiteralFromOutfeed(
     se::StreamExecutor* executor, MutableBorrowingLiteral literal) {
   return gpu::GetOrCreateOutfeedManager(executor)->TransferLiteralFromOutfeed(
       executor, literal);
 }
 
-void GpuTransferManager::EnsurePinnedBuffersAllocated(
+absl::Status GpuTransferManager::EnsurePinnedBuffersAllocated(
     se::StreamExecutor* executor) {
   if (pinned_chunk_ != nullptr) {
-    return;
+    return absl::OkStatus();
   }
 
+  TF_ASSIGN_OR_RETURN(pinned_chunk_,
+                      executor->HostMemoryAllocate(kPinnedChunkBytes));
   pinned_chunk_se_ = executor;
-  pinned_chunk_ =
-      reinterpret_cast<char*>(executor->HostMemoryAllocate(kPinnedChunkBytes));
+
   static_assert(kPinnedChunkBytes % kPinnedBufferBytes == 0,
                 "assumption of loop below");
-  for (char* buf = pinned_chunk_; buf < pinned_chunk_ + kPinnedChunkBytes;
+  char* base = reinterpret_cast<char*>(pinned_chunk_->opaque());
+  for (char* buf = base; buf < base + kPinnedChunkBytes;
        buf += kPinnedBufferBytes) {
     pinned_buffers_.push_back(buf);
   }
+
+  return absl::OkStatus();
 }
 
-Status GpuTransferManager::ReadDynamicShapes(se::Stream* stream,
-                                             const ShapedBuffer* device_buffer,
-                                             Shape* device_shape) {
+absl::Status GpuTransferManager::ReadDynamicShapes(
+    se::Stream* stream, const ShapedBuffer* device_buffer,
+    Shape* device_shape) {
   DCHECK(device_shape->is_dynamic());
   Shape original_device_shape = *device_shape;
 
@@ -105,12 +107,12 @@ Status GpuTransferManager::ReadDynamicShapes(se::Stream* stream,
         const Shape& buffer_shape =
             ShapeUtil::GetSubshape(*device_shape, index);
         if (buffer_shape.IsTuple()) {
-          return OkStatus();
+          return absl::OkStatus();
         }
         Shape& device_sub_shape =
             *ShapeUtil::GetMutableSubshape(device_shape, index);
         if (device_sub_shape.is_static()) {
-          return OkStatus();
+          return absl::OkStatus();
         }
 
         // Read the dynamic shape metadata from the device stream.  The dynamic
@@ -126,7 +128,7 @@ Status GpuTransferManager::ReadDynamicShapes(se::Stream* stream,
         auto metadata_buffer = buffer_8.GetSlice(offset, metadata_size);
         copies.push_back(std::make_pair(metadata_buffer, &device_sub_shape));
 
-        return OkStatus();
+        return absl::OkStatus();
       }));
 
   // Check out pinned memory for each buffer we want to copy.  If there aren't
@@ -145,7 +147,7 @@ Status GpuTransferManager::ReadDynamicShapes(se::Stream* stream,
 
   {
     absl::MutexLock lock(&mu_);
-    EnsurePinnedBuffersAllocated(stream->parent());
+    TF_RETURN_IF_ERROR(EnsurePinnedBuffersAllocated(stream->parent()));
 
     for (const auto& src_dst : copies) {
       se::DeviceMemoryBase src = src_dst.first;
@@ -186,7 +188,7 @@ Status GpuTransferManager::ReadDynamicShapes(se::Stream* stream,
   device_shape->clear_dynamic_dimensions();
   TF_RET_CHECK(ShapeUtil::DynamicShapeIsCompatible(*device_shape,
                                                    original_device_shape));
-  return OkStatus();
+  return absl::OkStatus();
 }
 
 }  // namespace gpu
@@ -213,4 +215,5 @@ static bool InitModule() {
       stream_executor::rocm::kROCmPlatformId, &CreateAMDGPUTransferManager);
   return true;
 }
+
 static bool module_initialized = InitModule();

@@ -1,4 +1,4 @@
-/* Copyright 2022 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2022 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -132,8 +132,6 @@ class ClusterEnvironment {
   double TryCollectivePermuteForResharding(const Shape& shape,
                                            const HloSharding& src_spec,
                                            const HloSharding& dst_spec) const;
-
-  double DotCost(const Shape& lhs_shape, const Shape& rhs_shape) const;
 
   // This function attempts to overestimate the cost of replicating a tensor of
   // shape `shape` sharded according to `src_spec`.

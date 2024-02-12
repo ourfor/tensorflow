@@ -1,8 +1,8 @@
-load("@local_tsl//tsl/platform:rules_cc.bzl", "cc_library")
-load("//tsl/platform:build_config_root.bzl", "if_static")
-load("//tsl:tsl.default.bzl", "filegroup")
 load("//tsl:tsl.bzl", "if_not_android", "set_external_visibility")
+load("//tsl:tsl.default.bzl", "filegroup")
 load("//tsl/platform:build_config.bzl", "tsl_cc_test")
+load("//tsl/platform:build_config_root.bzl", "if_static")
+load("@local_tsl//tsl/platform:rules_cc.bzl", "cc_library")
 load(
     "//tsl/platform/default:cuda_build_defs.bzl",
     "if_cuda_is_configured",
@@ -218,6 +218,7 @@ tsl_cc_test(
         ":traceme_encode",
         "//tsl/platform",
         "//tsl/platform:test",
+        "//tsl/platform:test_benchmark",
         "//tsl/platform:test_main",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -275,18 +276,6 @@ cc_library(
     ]),
 )
 
-cc_library(
-    name = "scoped_annotation_stack",
-    hdrs = ["scoped_annotation_stack.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@com_google_absl//absl/strings",
-    ] + if_not_android([
-        ":nvtx_utils",
-        "//tsl/profiler/backends/cpu:annotation_stack",
-    ]),
-)
-
 tsl_cc_test(
     name = "scoped_annotation_test",
     size = "small",
@@ -294,7 +283,6 @@ tsl_cc_test(
     visibility = ["//visibility:public"],
     deps = [
         ":scoped_annotation",
-        ":scoped_annotation_stack",
         "//tsl/platform:test",
         "//tsl/platform:test_benchmark",
         "//tsl/platform:test_main",

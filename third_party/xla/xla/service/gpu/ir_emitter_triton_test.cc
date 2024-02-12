@@ -1,4 +1,4 @@
-/* Copyright 2023 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2023 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ limitations under the License.
 #include "xla/service/gpu/ir_emission_utils.h"
 #include "xla/service/gpu/matmul_utils.h"
 #include "xla/service/gpu/tests/gpu_codegen_test.h"
+#include "xla/service/gpu/triton_fusion_analysis.h"
 #include "xla/service/pattern_matcher.h"
 #include "xla/service/pattern_matcher_gmock.h"
 #include "xla/status_macros.h"
@@ -77,7 +78,20 @@ class TritonGemmTest : public TritonTest {
  public:
   DebugOptions GetDebugOptionsForTest() override {
     DebugOptions debug_options = TritonTest::GetDebugOptionsForTest();
+    // Do not fall back to cuBLAS, we are testing Triton.
     debug_options.set_xla_gpu_cublas_fallback(false);
+    // Do not autotune split-k by default, since this prevents deterministically
+    // matching the optimized HLO.
+    debug_options.set_xla_gpu_enable_split_k_autotuning(false);
+    return debug_options;
+  }
+};
+
+class TritonGemmTestWithSplitK : public TritonGemmTest {
+ public:
+  DebugOptions GetDebugOptionsForTest() override {
+    DebugOptions debug_options = TritonGemmTest::GetDebugOptionsForTest();
+    debug_options.set_xla_gpu_enable_split_k_autotuning(true);
     return debug_options;
   }
 };
@@ -93,13 +107,13 @@ class TritonGemmTestWithoutTritonGemmAny : public TritonGemmTest {
 
 class TritonFilecheckTest : public TritonTest {
  public:
-  StatusOr<bool> CreateTritonIrAndFileCheck(
+  absl::StatusOr<bool> CreateTritonIrAndFileCheck(
       absl::string_view hlo_text, const TritonGemmConfig& config,
       TritonIrEmitter emitter, absl::string_view triton_fusion_name,
       absl::string_view filecheck_pattern);
 };
 
-StatusOr<bool> TritonFilecheckTest::CreateTritonIrAndFileCheck(
+absl::StatusOr<bool> TritonFilecheckTest::CreateTritonIrAndFileCheck(
     absl::string_view hlo_text, const TritonGemmConfig& config,
     TritonIrEmitter emitter, absl::string_view triton_fusion_name,
     absl::string_view filecheck_pattern) {
@@ -108,6 +122,7 @@ StatusOr<bool> TritonFilecheckTest::CreateTritonIrAndFileCheck(
 
   auto* computation =
       verified_module->GetComputationWithName(triton_fusion_name);
+  TF_RET_CHECK(computation != nullptr);
   TF_ASSIGN_OR_RETURN(auto analysis,
                       TritonFusionAnalysis::Execute(*computation));
 
@@ -143,7 +158,10 @@ ENTRY e {
   p0 = s8[80,115]{1,0} parameter(0)
   ROOT triton_gemm_r = f32[80,137]{1,0} fusion(p0, p1), kind=kCustom,
     calls=triton_gemm_r,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":16,"block_n":64,"block_k":32,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":16,"block_n":64,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":2,
+                         "num_ctas":1}}}
 })";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
   ASSERT_THAT(CreateTritonIrAndFileCheck(kHloText, config, EmitMatMul,
@@ -232,7 +250,7 @@ triton_softmax_computation {
 
 ENTRY main {
   param_0 = f32[125,127]{1,0} parameter(0)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 })";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
   ASSERT_THAT(CreateTritonIrAndFileCheck(kHloText, config, EmitSoftMax,
@@ -285,7 +303,7 @@ triton_softmax_computation {
 
 ENTRY main {
   param_0 = f32[] constant(42)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 })";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
   ASSERT_THAT(CreateTritonIrAndFileCheck(kHloText, config, EmitSoftMax,
@@ -340,7 +358,7 @@ triton_softmax_computation {
 ENTRY main {
   param_0 = f32[125,127]{1,0} parameter(0)
   param_1 = f32[127]{0} parameter(1)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 }
 )";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
@@ -405,7 +423,7 @@ triton_softmax_computation {
 ENTRY main {
   param_0 = f32[125,127]{1,0} parameter(1)
   param_1 = f32[127]{0} parameter(0)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_1, param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_1, param_0), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 }
 )";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
@@ -468,7 +486,7 @@ triton_softmax_computation {
 ENTRY main {
   param_0 = f32[125,127]{1,0} parameter(0)
   param_1 = f32[127]{0} parameter(1)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 }
 )";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
@@ -535,7 +553,7 @@ ENTRY main {
   param_0 = f32[125,127]{1,0} parameter(1)
   param_1 = f32[127]{0} parameter(0)
   param_2 = f32[125]{0} parameter(2)
-  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1, param_2), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[125,127]{1,0} fusion(param_0, param_1, param_2), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 }
 )";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
@@ -606,7 +624,7 @@ ENTRY main {
   param_0 = f32[10,125,127]{2,1,0} parameter(0)
   param_1 = f32[127]{0} parameter(1)
   param_2 = f32[10,125]{1,0} parameter(2)
-  ROOT triton_softmax = f32[10,125,127]{2,1,0} fusion(param_0, param_1, param_2), kind=kCustom, calls=triton_softmax_computation, backend_config={"kind":"__triton_softmax"}
+  ROOT triton_softmax = f32[10,125,127]{2,1,0} fusion(param_0, param_1, param_2), kind=kCustom, calls=triton_softmax_computation, backend_config={"fusion_backend_config": {"kind":"__triton_softmax"}}
 }
 )";
   TritonGemmConfig config(16, 64, 32, 1, 1, 1);
@@ -672,10 +690,12 @@ ENTRY e {
   c = f32[2,2]{1,0} parameter(3)
   ROOT triton_gemm = f32[2,2]{1,0} fusion(p, a, b, c), kind=kCustom,
     calls=triton_gemm_computation,
-    backend_config={kind: "__triton_gemm",
-      triton_gemm_config: {
-        "block_m":16,"block_n":16,"block_k":16,
-        "split_k":1,"num_stages":1,"num_warps":1
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+        triton_gemm_config: {
+          "block_m":16,"block_n":16,"block_k":16,
+          "split_k":1,"num_stages":1,"num_warps":1,
+          "num_ctas":1
+        }
       }
     }
 }
@@ -711,7 +731,10 @@ ENTRY e {
   parameter_2 = f32[2,10,256]{2,1,0} parameter(2)
   ROOT dot = f32[2,3,384]{2,1,0} fusion(parameter_0, parameter_1, parameter_2),
     kind=kCustom, calls=triton_gemm,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":16,"block_n":64,"block_k":32,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":16,"block_n":64,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":2,
+                         "num_ctas":1}}}
 })";
 
   TritonGemmConfig config(16, 64, 32, 1, 1, 2);
@@ -751,8 +774,10 @@ ENTRY e {
   p0 = s8[80,15]{1,0} parameter(0)
   ROOT triton_gemm_r = f32[80,16]{1,0} fusion(p0, p1), kind=kCustom,
     calls=triton_gemm_r,
-    backend_config={kind: "__triton_gemm", triton_gemm_config:
-      {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm", triton_gemm_config:
+      {"block_m":32,"block_n":32,"block_k":32,
+       "split_k":1,"num_stages":1,"num_warps":2,
+       "num_ctas":1}}}
 })";
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> verified_module,
                           ParseAndReturnVerifiedModule(kHloText));
@@ -807,8 +832,10 @@ ENTRY e {
   p0 = s8[80,15]{1,0} parameter(0)
   ROOT triton_gemm_r = f32[80,16]{1,0} fusion(p0, p1), kind=kCustom,
     calls=triton_gemm_r,
-    backend_config={kind: "__triton_gemm", triton_gemm_config:
-      {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm", triton_gemm_config:
+      {"block_m":32,"block_n":32,"block_k":32,
+      "split_k":1,"num_stages":1,"num_warps":2,
+      "num_ctas":1}}}
 })";
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> verified_module,
                           ParseAndReturnVerifiedModule(kHloText));
@@ -882,7 +909,8 @@ ENTRY entry {
   EXPECT_GT(result.shmem_bytes, dev_info.shared_memory_per_block());
 }
 
-TEST_F(TritonGemmTest, WorksWhenKIsDivisibleByBlockKButNotByBlockKTimesSplitK) {
+TEST_F(TritonGemmTestWithSplitK,
+       WorksWhenKIsDivisibleByBlockKButNotByBlockKTimesSplitK) {
   // The condition mentioned in the test name is fulfilled by
   // GemmKey(16, 64, 256, 8, 1, 4), which was part of the default configs for
   // Ampere at the time of the addition of this test case.
@@ -970,10 +998,11 @@ TEST_F(TritonGemmTest, SplitLhsNoncontractingTransposeRhs) {
 HloModule t
 
 ENTRY e {
-  p0 = s8[3,122,96,12]{3,2,1,0} parameter(0)
+  p0 = pred[3,122,96,12]{3,2,1,0} parameter(0)
   cp0 = f16[3,122,96,12]{3,2,1,0} convert(p0)
-  p1 = f16[1,5,122]{2,1,0} parameter(1)
-  ROOT _ = f16[3,96,12,1,5]{4,3,2,1,0} dot(cp0, p1),
+  p1 = pred[1,5,122]{2,1,0} parameter(1)
+  cp1 = f16[1,5,122]{2,1,0} convert(p1)
+  ROOT _ = f16[3,96,12,1,5]{4,3,2,1,0} dot(cp0, cp1),
     lhs_contracting_dims={1}, rhs_contracting_dims={2}
 })";
 
@@ -986,7 +1015,7 @@ ENTRY e {
 ; CHECK-SAME: "block_m":
 )");
 
-  EXPECT_TRUE(RunAndCompare(hlo_text, ErrorSpec{/*aabs=*/1e-2, /*arel=*/1e-2}));
+  EXPECT_TRUE(RunAndCompare(hlo_text, ErrorSpec{/*aabs=*/0, /*arel=*/0}));
 }
 
 TEST_F(TritonGemmTest, SplitLhsNoncontracting) {
@@ -1399,10 +1428,11 @@ ENTRY e {
   p0 = f32[92,11]{1,0} parameter(0)
   ROOT triton_gemm__ = f32[92,63]{1,0} fusion(p0), kind=kCustom,
     calls=triton_gemm___computation,
-    backend_config={"kind":"__triton_gemm",
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
                     "triton_gemm_config":{"block_m":"16","block_n":"64",
                                           "block_k":"16","split_k":"1",
-                                          "num_stages":"3","num_warps":"2"}}
+                                          "num_stages":"3","num_warps":"2",
+                                          "num_ctas":"1"}}}
 })")
                   .status());
 }
@@ -1426,7 +1456,7 @@ ENTRY e {
   p0 = f16[55,77,111]{2,1,0} parameter(0)
   p1 = f16[111,77,99]{2,1,0} parameter(1)
   ROOT r = f16[77,55,99]{2,1,0} fusion(p0, p1), kind=kCustom,
-    calls=t, backend_config={"kind":"__triton_gemm"}
+    calls=t, backend_config={"fusion_backend_config": {"kind":"__triton_gemm"}}
 })",
                     // This partially optimized HLO will go through the
                     // autotuner which will run the fusion through the emitter
@@ -1458,7 +1488,7 @@ ENTRY e {
   p0 = f32[2,7,3]{2,1,0} parameter(0)
   p1 = s32[2,1]{1,0} parameter(1)
   ROOT r = f32[2,7,3]{2,1,0} fusion(p0, p1), kind=kCustom,
-    calls=t, backend_config={"kind":"__triton_gemm"}
+    calls=t, backend_config={"fusion_backend_config": {"kind":"__triton_gemm"}}
 })",
                     // This partially optimized HLO will go through the
                     // autotuner which will run the fusion through the emitter
@@ -1512,9 +1542,7 @@ ENTRY e {
 })";
 
   MatchOptimizedHlo(hlo_text, R"(
-; CHECK: fusion
-; CHECK-SAME: kind=kCustom
-; CHECK-SAME: block_m
+; CHECK: fusion({{.*}} kind=kCustom, {{.*}}block_m
 )");
 
   EXPECT_TRUE(RunAndCompare(hlo_text, ErrorSpec{/*aabs=*/1e-3, /*arel=*/1e-3}));
@@ -1609,7 +1637,7 @@ ENTRY e {
 })";
 
   MatchOptimizedHlo(kHloText, R"(
-; CHECK: fused_computation
+; CHECK: fused_subtract
 ; CHECK: negate
 ; CHECK: negate
 ; CHECK: ROOT
@@ -1832,8 +1860,10 @@ ENTRY e {
   p0 = f16[75] parameter(0)
   p1 = f16[92,75] parameter(1)
   ROOT _ = f16[92,67] fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config:
-      {"block_m":32,"block_n":64,"block_k":32,"split_k":1,"num_stages":1,"num_warps":1}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm", triton_gemm_config:
+      {"block_m":32,"block_n":64,"block_k":32,
+      "split_k":1,"num_stages":1,"num_warps":1,
+      "num_ctas":1}}}
 })";
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
@@ -2172,7 +2202,8 @@ ENTRY e {
   EXPECT_TRUE(RunAndCompare(kHloText, ErrorSpec{/*aabs=*/1e-3, /*arel=*/1e-3}));
 }
 
-TEST_F(TritonGemmTest, SplitKDoesNotBreakSlicedFragmentedContractingDimension) {
+TEST_F(TritonGemmTestWithSplitK,
+       SplitKDoesNotBreakSlicedFragmentedContractingDimension) {
   const std::string kHloText = R"(
 ENTRY e {
   p0 = f16[16,8,128]{2,1,0} parameter(0)
@@ -2427,7 +2458,11 @@ ENTRY e {
   p0 = s8[101,202]{1,0} parameter(0)
   p1 = f32[202,303]{1,0} parameter(1)
   ROOT _ = f32[101,303] fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":16,"block_n":64,"block_k":32,"split_k":1,"num_stages":3,"num_warps":8}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+      triton_gemm_config:
+        {"block_m":16,"block_n":64,"block_k":32,
+         "split_k":1,"num_stages":3,"num_warps":8,
+         "num_ctas":1}}}
 })";
 
   const char* hlo_text_triton = R"(
@@ -2445,7 +2480,10 @@ ENTRY e {
   p0 = s8[101,202]{1,0} parameter(0)
   p1 = f32[202,303]{1,0} parameter(1)
   ROOT _ = f32[101,303] fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":128,"block_k":32,"split_k":1,"num_stages":2,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":128,"block_k":32,
+                         "split_k":1,"num_stages":2,"num_warps":4,
+                         "num_ctas":1}}}
 })";
 
   EXPECT_TRUE(RunAndCompareTwoModules(hlo_text_ref, hlo_text_triton,
@@ -2462,7 +2500,7 @@ ENTRY e {
   arg1 = f16[7,33] parameter(1)
   gemm = (f16[5,33], s8[0]{0}) custom-call(arg0, arg1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f16[5,33]{1,0} get-tuple-element((f16[5,33]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2481,7 +2519,10 @@ ENTRY e {
   p0 = f16[5,7]{1,0} parameter(0)
   p1 = f16[7,33]{1,0} parameter(1)
   ROOT _ = f16[5,33] fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":1}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":1,
+                         "num_ctas":1}}}
 }
 )";
 
@@ -2499,7 +2540,7 @@ ENTRY e {
   arg1 = f32[7,33] parameter(1)
   gemm = (f32[5,33], s8[0]{0}) custom-call(arg0, arg1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f32[5,33]{1,0} get-tuple-element((f32[5,33]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2518,7 +2559,10 @@ ENTRY e {
   p0 = f32[5,7]{1,0} parameter(0)
   p1 = f32[7,33]{1,0} parameter(1)
   ROOT _ = f32[5,33] fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":1}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":1,
+                         "num_ctas":1}}}
 }
 )";
 
@@ -2541,7 +2585,7 @@ ENTRY e {
   arg1 = bf16[512,256]{1,0} parameter(1)
   gemm = (bf16[16,256]{1,0}, s8[0]{0}) custom-call(arg0, arg1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[0],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[0],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = bf16[16,256]{1,0} get-tuple-element((bf16[16,256]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2560,7 +2604,10 @@ ENTRY e {
   arg0 = bf16[512,16]{1,0} parameter(0)
   arg1 = bf16[512,256]{1,0} parameter(1)
   ROOT _ = bf16[16,256]{1,0} fusion(arg0, arg1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":128,"block_n":32,"block_k":16,"split_k":1,"num_stages":2,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":128,"block_n":32,"block_k":16,
+                         "split_k":1,"num_stages":2,"num_warps":4,
+                        "num_ctas":1}}}
 }
 )";
 
@@ -2596,7 +2643,10 @@ ENTRY e {
   p0 = s8[332,441]{1,0} parameter(0)
   p1 = f16[441,39]{1,0} parameter(1)
   ROOT _ = f16[332,39]{1,0} fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":128,"block_n":128,"block_k":128,"split_k":1,"num_stages":2,"num_warps":32}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":128,"block_n":128,"block_k":128,
+                         "split_k":1,"num_stages":2,"num_warps":32,
+                         "num_ctas":1}}}
 })";
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> hlo_module,
@@ -2609,16 +2659,19 @@ ENTRY e {
   llvm::Module llvm_module("module", llvm_ctx);
   mlir::MLIRContext mlir_context;
 
-  TF_ASSERT_OK_AND_ASSIGN(auto config,
+  TF_ASSERT_OK_AND_ASSIGN(auto gpu_config,
                           hlo_module->entry_computation()
                               ->root_instruction()
-                              ->backend_config<FusionBackendConfig>());
+                              ->backend_config<GpuBackendConfig>());
+  const FusionBackendConfig& config = gpu_config.fusion_backend_config();
+  TF_ASSERT_OK_AND_ASSIGN(
+      TritonGemmConfig triton_gemm_config,
+      TritonGemmConfig::FromProto(config.triton_gemm_config()));
   TF_ASSERT_OK_AND_ASSIGN(
       const auto result,
       TritonWrapper(*TritonFusionAnalysis::Execute(*triton_dot_computation),
                     "test_fn", triton_dot_computation, kTritonGemmFusionKind,
-                    GetCudaComputeCapability(), dev_info,
-                    TritonGemmConfig::FromProto(config.triton_gemm_config()),
+                    GetCudaComputeCapability(), dev_info, triton_gemm_config,
                     &llvm_module, &EmitMatMul, mlir_context));
   // The config is chosen so that the used memory size is slightly above the
   // 48 kB boundary of standard / optin shared memory so that any GPU that
@@ -2642,7 +2695,10 @@ ENTRY e {
   p0 = s8[332,441]{1,0} parameter(0)
   p1 = f16[441,39]{1,0} parameter(1)
   ROOT _ = f16[332,39]{1,0} fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
 })";
 
   EXPECT_TRUE(RunAndCompareTwoModules(kHloTextLowShmem, kHloTextOptinShmem,
@@ -2659,7 +2715,7 @@ ENTRY e {
   arg1 = f16[64,32]{1,0} parameter(1)
   gemm = (f16[128,64]{1,0}, s8[0]{0}) custom-call(arg0, arg1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[1],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[1],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f16[128,64]{1,0} get-tuple-element((f16[128,64]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2678,7 +2734,10 @@ ENTRY e {
   arg0 = f16[128,32]{1,0} parameter(0)
   arg1 = f16[64,32]{1,0} parameter(1)
   ROOT _ = f16[128,64]{1,0} fusion(arg0, arg1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":128,"block_n":32,"block_k":64,"split_k":1,"num_stages":2,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":128,"block_n":32,"block_k":64,
+                         "split_k":1,"num_stages":2,"num_warps":4,
+                         "num_ctas":1}}}
 }
 )";
 
@@ -2696,7 +2755,7 @@ ENTRY e {
   arg1 = f32[1024,64]{1,0} parameter(1)
   gemm = (f32[128,1024]{1,0}, s8[0]{0}) custom-call(arg0, arg1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[0],"rhs_contracting_dimensions":[1],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[0],"rhs_contracting_dimensions":[1],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f32[128,1024]{1,0} get-tuple-element((f32[128,1024]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2715,7 +2774,10 @@ ENTRY e {
   arg0 = f32[64,128]{1,0} parameter(0)
   arg1 = f32[1024,64]{1,0} parameter(1)
   ROOT _ = f32[128,1024]{1,0} fusion(arg0, arg1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":64,"split_k":1,"num_stages":2,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":64,
+                         "split_k":1,"num_stages":2,"num_warps":4,
+                         "num_ctas":1}}}
 }
 )";
 
@@ -2743,7 +2805,7 @@ ENTRY e {
   p1 = bf16[256,122]{1,0} parameter(1)
   gemm = (bf16[144,122]{1,0}, s8[0]{0}) custom-call(fusion, p1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":[1],"rhs_contracting_dimensions":[0],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = bf16[144,122]{1,0} get-tuple-element((bf16[144,122]{1,0}, s8[0]{0}) gemm), index=0
 }
 )";
@@ -2763,7 +2825,10 @@ ENTRY e {
   p0 = s8[144,256]{1,0} parameter(0)
   p1 = bf16[256,122]{1,0} parameter(1)
   ROOT _ = bf16[144,122]{1,0} fusion(p0, p1), kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":64,"block_k":64,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":64,"block_k":64,
+                         "split_k":1,"num_stages":1,"num_warps":2,
+                         "num_ctas":1}}}
 }
 )";
 
@@ -2794,7 +2859,10 @@ ENTRY e {
   bitcast.4 = s8[480,120]{1,0} bitcast(p0)
   ROOT triton_gemm_r = bf16[480,16]{1,0} fusion(bitcast.4, p1), kind=kCustom,
     calls=triton_gemm_r,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,"split_k":1,"num_stages":4,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,
+                         "split_k":1,"num_stages":4,"num_warps":4,
+                         "num_ctas":1}}}
 })";
 
   const std::string hlo_text_splitk = R"(
@@ -2833,7 +2901,10 @@ ENTRY e {
   bitcast.4 = s8[480,120]{1,0} bitcast(p0)
   triton_gemm_r = bf16[4,480,16]{2,1,0} fusion(bitcast.4, p1), kind=kCustom,
     calls=triton_gemm_r,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":128,"split_k":4,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":128,
+                         "split_k":4,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
   ROOT fusion.1 = bf16[480,16]{1,0} fusion(triton_gemm_r), kind=kLoop,
     calls=fused_computation
 })";
@@ -2865,7 +2936,10 @@ ENTRY e {
   tmp_0 = bf16[1,1,800,5,128]{4,3,2,1,0} parameter(1)
   ROOT triton_gemm_dot.24 = f32[5,128,700]{2,1,0} fusion(tmp_3, tmp_0),
     kind=kCustom, calls=triton_gemm_dot.24,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,"split_k":1,"num_stages":2,"num_warps":8}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,
+                         "split_k":1,"num_stages":2,"num_warps":8,
+                         "num_ctas":1}}}
 })";
 
   const std::string kHloTextSplitK = R"(
@@ -2893,7 +2967,10 @@ ENTRY e {
   tmp_0 = bf16[1,1,800,5,128]{4,3,2,1,0} parameter(1)
   triton_gemm_dot.24 = f32[8,5,128,700]{3,2,1,0} fusion(tmp_3, tmp_0),
     kind=kCustom, calls=triton_gemm_dot,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,"split_k":8,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":32,"block_k":64,
+                         "split_k":8,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
   constant = f32[] constant(0)
   ROOT reduce = f32[5,128,700]{2,1,0} reduce(triton_gemm_dot.24, constant), dimensions={0}, to_apply=add
 })";
@@ -2926,7 +3003,10 @@ ENTRY entry {
   parameter_1.1 = bf16[16,4,128]{2,1,0} parameter(1)
   ROOT triton_gemm_dot.5316 = bf16[16,96]{1,0} fusion(bitcast.6, parameter_1.1),
     kind=kCustom, calls=triton_gemm_dot.5316,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":32,"block_k":256,"split_k":1,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":256,
+                         "split_k":1,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
 })";
 
   const std::string kHloTextSplitK = R"(
@@ -2966,7 +3046,10 @@ ENTRY entry {
   parameter_1.1 = bf16[16,4,128]{2,1,0} parameter(1)
   triton_gemm_dot.5316 = bf16[16,16,96]{2,1,0} fusion(bitcast.6, parameter_1.1),
     kind=kCustom, calls=triton_gemm_dot.5316,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":32,"block_k":32,"split_k":16,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":32,"block_k":32,
+                         "split_k":16,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
   ROOT fusion.1 = bf16[16,96]{1,0} fusion(triton_gemm_dot.5316),
     kind=kLoop, calls=fused_computation
 })";
@@ -2998,7 +3081,11 @@ triton_gemm_dot.clone {
 ENTRY entry_computation {
   p0 = s8[3,129,5,32]{3,2,1,0} parameter(0)
   p1 = f16[16,129]{1,0} parameter(1)
-  ROOT fusion = f16[480,16]{1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.clone, backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"32","block_n":"32","block_k":"256","split_k":"1","num_stages":"1","num_warps":"4"}}
+  ROOT fusion = f16[480,16]{1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.clone,
+  backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+  "triton_gemm_config":{"block_m":"32","block_n":"32","block_k":"256",
+                        "split_k":"1","num_stages":"1","num_warps":"4",
+                        "num_ctas":"1"}}}
 }
 )";
 
@@ -3039,7 +3126,11 @@ fused_computation {
 ENTRY entry_computation {
   p0 = s8[3,129,5,32]{3,2,1,0} parameter(0)
   p1 = f16[16,129]{1,0} parameter(1)
-  fusion = f32[2,480,16]{2,1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.clone, backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"128","block_n":"128","block_k":"64","split_k":"2","num_stages":"1","num_warps":"8"}}
+  fusion = f32[2,480,16]{2,1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.clone,
+  backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+  "triton_gemm_config":{"block_m":"128","block_n":"128","block_k":"64",
+                        "split_k":"2","num_stages":"1","num_warps":"8",
+                        "num_ctas":"1"}}}
   ROOT fusion.1 = f16[480,16]{1,0} fusion(fusion), kind=kLoop, calls=fused_computation
 }
 )";
@@ -3067,7 +3158,10 @@ ENTRY entry_computation {
   p1 = f16[1,1023,128]{2,1,0} parameter(1)
   ROOT triton_gemm_dot.7103 = f16[1,8,4,128]{3,2,1,0} fusion(p0, p1),
     kind=kCustom, calls=triton_gemm_dot.7103_computation.clone,
-    backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"128","block_n":"128","block_k":"32","split_k":"1","num_stages":"4","num_warps":"4"}}
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+    "triton_gemm_config":{"block_m":"128","block_n":"128","block_k":"32",
+                          "split_k":"1","num_stages":"4","num_warps":"4",
+                          "num_ctas":"1"}}}
 }
 )";
 
@@ -3115,7 +3209,12 @@ fused_computation.1 {
 ENTRY entry_computation {
   p0 = f16[1,8,4,1023]{3,2,1,0} parameter(0)
   p1 = f16[1,1023,128]{2,1,0} parameter(1)
-  triton_gemm_dot.7103 = f16[8,1,8,4,128]{4,3,2,1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.7103_computation.clone, backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"16","block_n":"128","block_k":"32","split_k":"8","num_stages":"1","num_warps":"4"}}
+  triton_gemm_dot.7103 = f16[8,1,8,4,128]{4,3,2,1,0} fusion(p0, p1), kind=kCustom,
+    calls=triton_gemm_dot.7103_computation.clone,
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+    "triton_gemm_config":{"block_m":"16","block_n":"128","block_k":"32",
+                          "split_k":"8","num_stages":"1","num_warps":"4",
+                          "num_ctas":"1"}}}
   ROOT fusion.1 = f16[1,8,4,128]{3,2,1,0} fusion(triton_gemm_dot.7103), kind=kLoop, calls=fused_computation.1
 }
 )";
@@ -3141,7 +3240,12 @@ triton_gemm_dot.7103_computation.clone {
 ENTRY entry_computation {
   p0 = f16[1,8,4,1019]{3,2,1,0} parameter(0)
   p1 = f16[1,1019,128]{2,1,0} parameter(1)
-  ROOT triton_gemm_dot.7103 = f16[1,8,4,128]{3,2,1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.7103_computation.clone, backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"32","block_n":"32","block_k":"256","split_k":"1","num_stages":"1","num_warps":"4"}}
+  ROOT triton_gemm_dot.7103 = f16[1,8,4,128]{3,2,1,0} fusion(p0, p1), kind=kCustom,
+    calls=triton_gemm_dot.7103_computation.clone,
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+    "triton_gemm_config":{"block_m":"32","block_n":"32","block_k":"256",
+                          "split_k":"1","num_stages":"1","num_warps":"4",
+                          "num_ctas":"1"}}}
 }
 )";
 
@@ -3189,7 +3293,12 @@ fused_computation.1 {
 ENTRY entry_computation {
   p0 = f16[1,8,4,1019]{3,2,1,0} parameter(0)
   p1 = f16[1,1019,128]{2,1,0} parameter(1)
-  triton_gemm_dot.7103 = f16[16,1,8,4,128]{4,3,2,1,0} fusion(p0, p1), kind=kCustom, calls=triton_gemm_dot.7103_computation.clone, backend_config={"kind":"__triton_gemm","triton_gemm_config":{"block_m":"64","block_n":"32","block_k":"32","split_k":"16","num_stages":"1","num_warps":"4"}}
+  triton_gemm_dot.7103 = f16[16,1,8,4,128]{4,3,2,1,0} fusion(p0, p1), kind=kCustom,
+    calls=triton_gemm_dot.7103_computation.clone,
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
+    "triton_gemm_config":{"block_m":"64","block_n":"32","block_k":"32",
+                          "split_k":"16","num_stages":"1","num_warps":"4",
+                          "num_ctas":"1"}}}
   ROOT fusion.1 = f16[1,8,4,128]{3,2,1,0} fusion(triton_gemm_dot.7103), kind=kLoop, calls=fused_computation.1
 }
 )";
@@ -3217,7 +3326,10 @@ ENTRY e {
   p1 = f32[32,50,104]{2,1,0} parameter(1)
   ROOT triton_gemm_dot.6 = f32[32,50,26]{2,0,1} fusion(p0, p1),
     kind=kCustom, calls=triton_gemm_dot.6,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":64,"block_n":16,"block_k":32,"split_k":1,"num_stages":1,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":64,"block_n":16,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":4,
+                         "num_ctas":1}}}
 })";
 
   const std::string kHloTextRef = R"(
@@ -3243,7 +3355,10 @@ ENTRY e {
   %parameter_1 = f32[32,50,104]{2,1,0} parameter(1)
   %triton_gemm_dot.127 = f32[32,50,26]{2,1,0} fusion(%parameter_0, %parameter_1),
     kind=kCustom, calls=%triton_gemm_dot.127,
-    backend_config={kind: "__triton_gemm", triton_gemm_config: {"block_m":32,"block_n":128,"block_k":64,"split_k":1,"num_stages":2,"num_warps":4}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":128,"block_k":64,
+                         "split_k":1,"num_stages":2,"num_warps":4,
+                         "num_ctas":1}}}
   ROOT %fusion.1 = f32[32,50,26]{2,0,1} fusion(%triton_gemm_dot.127), kind=kLoop, calls=%fused_computation
 })";
 
@@ -3269,10 +3384,11 @@ ENTRY e {
   p0 = f32[92,11]{1,0} parameter(0)
   ROOT triton_gemm__ = f32[63,92]{1,0} fusion(p0), kind=kCustom,
     calls=triton_gemm___computation,
-    backend_config={"kind":"__triton_gemm",
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
                     "triton_gemm_config":{"block_m":"16","block_n":"64",
                                           "block_k":"16","split_k":"1",
-                                          "num_stages":"3","num_warps":"2"}}
+                                          "num_stages":"3","num_warps":"2",
+                                          "num_ctas":"1"}}}
 })";
 
   const std::string kHloTextRef = R"(
@@ -3284,7 +3400,7 @@ ENTRY e {
   broadcast.2 = f32[11,63]{1,0} broadcast(constant_2), dimensions={}
   gemm = (f32[63,92]{1,0}, s8[0]{0}) custom-call(broadcast.2, parameter_0),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["0"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["0"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f32[63,92]{1,0} get-tuple-element((f32[63,92]{1,0}, s8[0]{0}) gemm), index=0
 })";
 
@@ -3309,10 +3425,11 @@ triton_gemm___computation {
 ENTRY e {
   ROOT triton_gemm__ = f32[11,45]{1,0} fusion(), kind=kCustom,
     calls=triton_gemm___computation,
-    backend_config={"kind":"__triton_gemm",
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
                     "triton_gemm_config":{"block_m":"16","block_n":"64",
                                           "block_k":"16","split_k":"1",
-                                          "num_stages":"3","num_warps":"2"}}
+                                          "num_stages":"3","num_warps":"2",
+                                          "num_ctas":"1"}}}
 })";
 
   const std::string kHloTextRef = R"(
@@ -3325,7 +3442,7 @@ ENTRY triton_gemm___computation {
   broadcast.1 = f32[63,45]{1,0} broadcast(constant_1), dimensions={}
   gemm = (f32[11,45]{1,0}, s8[0]{0}) custom-call(broadcast, broadcast.1),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["0"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["0"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f32[11,45]{1,0} get-tuple-element((f32[11,45]{1,0}, s8[0]{0}) gemm), index=0
 })";
 
@@ -3378,10 +3495,11 @@ ENTRY e {
   tmp_12 = f32[3,57]{1,0} parameter(11)
   ROOT r = f32[32,57]{0,1} fusion(tmp_1, tmp_2, tmp_3, tmp_5, tmp_7, tmp_14, tmp_15, tmp_16, tmp_18, tmp_9, tmp_10, tmp_12), kind=kCustom,
     calls=triton_gemm_dot_computation,
-    backend_config={"kind":"__triton_gemm",
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
                     "triton_gemm_config":{"block_m":"64","block_n":"64",
                                           "block_k":"64","split_k":"1",
-                                          "num_stages":"1","num_warps":"4"}}
+                                          "num_stages":"1","num_warps":"4",
+                                          "num_ctas":"1"}}}
 })";
 
   const std::string kHloTextRef = R"(
@@ -3431,7 +3549,7 @@ ENTRY e {
   fusion = f32[3,57]{1,0} fusion(tmp_18, tmp_14, tmp_15, tmp_16, tmp_12, /*index=5*/tmp_9, tmp_10), kind=kLoop, calls=fused_computation
   gemm = (f32[32,57]{0,1}, s8[0]{0}) custom-call(fusion.1, fusion),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["0"],"rhs_contracting_dimensions":["0"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["0"],"rhs_contracting_dimensions":["0"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"alpha_imag":0,"precision_config":{"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = f32[32,57]{0,1} get-tuple-element((f32[32,57]{0,1}, s8[0]{0}) gemm), index=0
 })";
 
@@ -3464,10 +3582,11 @@ ENTRY e {
   p2 = s32[11,63]{1,0} parameter(2)
   ROOT triton_gemm__ = bf16[92,63]{1,0} fusion(p0, p1, p2), kind=kCustom,
     calls=triton_gemm_computation,
-    backend_config={"kind":"__triton_gemm",
+    backend_config={"fusion_backend_config": {"kind":"__triton_gemm",
                     "triton_gemm_config":{"block_m":"32","block_n":"16",
                                           "block_k":"32","split_k":"1",
-                                          "num_stages":"1","num_warps":"4"}}
+                                          "num_stages":"1","num_warps":"4",
+                                          "num_ctas":"1"}}}
 })";
 
   const std::string kHloTextRef = R"(
@@ -3487,11 +3606,11 @@ ENTRY e {
   fusion = bf16[11,63]{1,0} fusion(p1, p2), kind=kLoop, calls=fused_computation
   gemm = (bf16[92,63]{1,0}, s8[0]{0}) custom-call(p0, fusion),
     custom_call_target="__cublas$gemm",
-    backend_config={"alpha_real":1,"beta":0,"dot_dimension_numbers":
+    backend_config={"gemm_backend_config": {"alpha_real":1,"beta":0,"dot_dimension_numbers":
       {"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["0"],
       "lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},
       "alpha_imag":0,"precision_config":
-      {"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}
+      {"operand_precision":["DEFAULT","DEFAULT"]},"epilogue":"DEFAULT"}}
   ROOT get-tuple-element = bf16[92,63]{1,0} get-tuple-element((bf16[92,63]{1,0}, s8[0]{0}) gemm), index=0
 })";
 
@@ -3524,8 +3643,10 @@ ENTRY e {
   p2 = f16[32,32]{1,0} parameter(2)
   ROOT r = f16[9,32]{1,0} fusion(p0, p1, p2),
     kind=kCustom, calls=triton_dot,
-    backend_config={kind: "__triton_gemm",
-    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,"split_k":1,"num_stages":1,"num_warps":2}}
+    backend_config={"fusion_backend_config": {kind: "__triton_gemm",
+    triton_gemm_config: {"block_m":32,"block_n":32,"block_k":32,
+                         "split_k":1,"num_stages":1,"num_warps":2,
+                         "num_ctas":"1"}}}
 })";
 
   const std::string kHloTextRef = R"(

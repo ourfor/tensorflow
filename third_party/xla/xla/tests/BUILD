@@ -194,6 +194,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":pjrt_client_registry",
+        "//xla/pjrt/gpu:gpu_helpers",
         "//xla/pjrt/gpu:se_gpu_pjrt_client",
     ],
 )
@@ -231,6 +232,7 @@ cc_library(
         "//xla/service:platform_util",
         "//xla/stream_executor",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/lib/core:status_test_util",
         "@local_tsl//tsl/platform:logging",
@@ -1311,6 +1313,7 @@ xla_test(
         "requires-gpu-sm80",
     ]},
     backends = ["gpu"],
+    tags = ["no_rocm"],  # No int8
     deps = [
         ":hlo_test_base",
         ":xla_internal_test_main",
@@ -2046,7 +2049,6 @@ xla_test(
             "multi_gpu",
             "no_oss",
             "notap",
-            "jitrt_executable",
         ],
         "cpu": [
             "notsan",
@@ -2085,7 +2087,6 @@ xla_test(
             "multi_gpu",
             "no_oss",
             "notap",
-            "jitrt_executable",
         ],
     },
     backends = [
@@ -2866,6 +2867,7 @@ xla_test(
         "cpu",
     ],
     copts = tsl_copts(),
+    tags = ["no_oss"],
     deps = [
         ":hlo_test_base",
         ":test_macros_header",

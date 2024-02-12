@@ -1,4 +1,4 @@
-/* Copyright 2024 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2024 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -66,15 +66,14 @@ TEST_F(ScatterFusionTest, ScatterFusion) {
 
   auto* root = module->entry_computation()->root_instruction();
   auto analysis_fused = AnalyzeFusion(*root, device_info);
-  ASSERT_NE(analysis_fused, std::nullopt);
 
   TF_ASSERT_OK_AND_ASSIGN(
       auto emitter,
-      GetFusionEmitter(PreBufferAssignmentFusionInfo{*analysis_fused}));
-  ASSERT_NE(dynamic_cast<ScatterFusion*>(emitter.get()), nullptr);
-  auto launch_dims = emitter->launch_dimensions();
-  ASSERT_NE(launch_dims, std::nullopt);
-  EXPECT_EQ(launch_dims->launch_bound(), 3 * 9 /* updates size */);
+      GetFusionEmitter(PreBufferAssignmentFusionInfo{analysis_fused}));
+  auto scatter_fusion = dynamic_cast<ScatterFusion*>(emitter.get());
+  ASSERT_NE(scatter_fusion, nullptr);
+  EXPECT_EQ(scatter_fusion->launch_dimensions().launch_bound(),
+            3 * 9 /* updates size */);
 }
 
 }  // namespace

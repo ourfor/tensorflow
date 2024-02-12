@@ -5,9 +5,8 @@ load("//third_party:repo.bzl", "tf_http_archive", "tf_mirror_urls")
 def repo():
     """Imports Triton."""
 
-    TRITON_COMMIT = "cl595147751"
-    TRITON_SHA256 = "828669e624820137988796dec2075084e94b03b6bc17eaf921d337d207d96054"
-
+    TRITON_COMMIT = "cl604551115"
+    TRITON_SHA256 = "0d06b198104d69359f57e25bac6e06d990ffd940bc1bed5f18cb4f4936fb0724"
     tf_http_archive(
         name = "triton",
         sha256 = TRITON_SHA256,
@@ -15,8 +14,7 @@ def repo():
         urls = tf_mirror_urls("https://github.com/openxla/triton/archive/{commit}.tar.gz".format(commit = TRITON_COMMIT)),
         # For temporary changes which haven't landed upstream yet.
         patch_file = [
-            "//third_party/triton:b304456327.patch",
-            "//third_party/triton:cl568176943.patch",
-            "//third_party/triton:cl595961303.patch",
+            # Upstream this in the next integrate
+            #"//third_party/triton:cl602997103.patch"
         ],
     )

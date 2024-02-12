@@ -1,4 +1,4 @@
-/* Copyright 2024 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2024 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ limitations under the License.
 #include "xla/service/gpu/fusions/fusion_emitter.h"
 #include "xla/service/gpu/hlo_fusion_analysis.h"
 #include "xla/service/gpu/ir_emitter_context.h"
-#include "xla/service/gpu/kernel_reuse_cache.h"
 #include "xla/statusor.h"
 
 namespace xla {
@@ -33,12 +32,13 @@ class TritonFusion : public FusionInterface {
   explicit TritonFusion(const HloFusionAnalysis& analysis)
       : analysis_(analysis) {}
 
-  StatusOr<FusionEmissionResult> Emit(
+  absl::StatusOr<FusionEmissionResult> Emit(
       IrEmitterContext& ir_emitter_context, mlir::lmhlo::FusionOp fusion_op,
-      const HloFusionInstruction& fusion,
-      KernelReuseCache& kernel_cache) const final;
+      const HloFusionInstruction& fusion) const final;
 
-  std::optional<LaunchDimensions> launch_dimensions() const override;
+  // Returns the launch dimensions for softmax fusions. Not supported for
+  // MatMul fusions.
+  std::optional<LaunchDimensions> launch_dimensions() const;
 
  private:
   const HloFusionAnalysis& analysis_;

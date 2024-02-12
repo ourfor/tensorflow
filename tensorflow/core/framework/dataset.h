@@ -171,6 +171,12 @@ class IteratorStateWriter {
                              const Tensor& val) = 0;
 
   virtual ~IteratorStateWriter() {}
+
+ protected:
+  // Accessible only through derived concrete class's copy/move constructors
+  IteratorStateWriter() = default;
+  IteratorStateWriter(const IteratorStateWriter&) = default;
+  IteratorStateWriter(IteratorStateWriter&&) = default;
 };
 
 // Generates a full name key for iterator checkpointing. All keys generated for
@@ -379,7 +385,8 @@ class Runner {
 // A class which provides a sequence of splits. Splits represent subdivisions of
 // a dataset, e.g. filenames or ranges within files. We use splitting to
 // partition input data into smaller pieces for distributed processing (see
-// go/tf-data-splitting-design).
+// go/tf-data-splitting-design). The SplitProvider subclasses are expected to be
+// thread-safe.
 //
 // Datasets provide a `MakeSplitProvider` method to expose a listing of their
 // splits.
@@ -419,7 +426,7 @@ int32_t GetRunnerThreadpoolSizeFromOpKernelContext(OpKernelContext* ctx);
 // `IteratorStateWriter` interface.
 //
 // The implementation is not thread-safe.
-class MemoryCheckpoint : public IteratorStateWriter {
+class MemoryCheckpoint final : public IteratorStateWriter {
  public:
   // IdRegistry maintains a bi-directional mapping between string and integer
   // representations of checkpoint keys.
@@ -457,6 +464,7 @@ class MemoryCheckpoint : public IteratorStateWriter {
       : id_registry_(registry) {}
 
   MemoryCheckpoint(MemoryCheckpoint&& other) = default;
+  MemoryCheckpoint(const MemoryCheckpoint& other) = default;
 
   static MemoryCheckpoint CreateRootCheckpoint(
       std::shared_ptr<IdRegistry> registry) {
@@ -523,7 +531,6 @@ class MemoryCheckpoint : public IteratorStateWriter {
  private:
   explicit MemoryCheckpoint(std::shared_ptr<IdRegistry> registry, bool is_root)
       : is_root_(is_root), id_registry_(registry) {}
-  MemoryCheckpoint(const MemoryCheckpoint&) = delete;
   void operator=(const MemoryCheckpoint&) = delete;
 
   Status status_ = OkStatus();

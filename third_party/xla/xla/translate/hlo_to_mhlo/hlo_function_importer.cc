@@ -1,4 +1,4 @@
-/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2019 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -639,7 +639,7 @@ Status HloFunctionImporter::ImportInstructions(
 
   CleanUpTupleOps(block, &builder);
 
-  return ::tsl::OkStatus();
+  return absl::OkStatus();
 }
 
 StatusOr<Value> HloFunctionImporter::ImportInstructions(
@@ -706,13 +706,18 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportCustomCallAsOp(
             builder_->getI64TensorAttr(broadcast_dimensions))
         .getOperation();
   }
+  // Dynamic ops with no attributes
+  if (!custom_call->raw_backend_config_string().empty()) {
+    return Internal("backend_config attribute must be empty.");
+  }
   if (custom_call->custom_call_target() == "mhlo.dynamic_reshape") {
-    auto raw_backend_config = custom_call->raw_backend_config_string();
-    if (!raw_backend_config.empty()) {
-      return Internal("backend_config attribute should be empty.");
-    }
     return func_builder
         ->create<mlir::mhlo::DynamicReshapeOp>(loc, result_type, operands)
+        .getOperation();
+  }
+  if (custom_call->custom_call_target() == "mhlo.real_dynamic_slice") {
+    return func_builder
+        ->create<mlir::mhlo::RealDynamicSliceOp>(loc, result_type, operands)
         .getOperation();
   }
   return InvalidArgument("Unsupported MHLO op custom_call %s",
@@ -788,11 +793,6 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
           "execution_thread", builder_->getStringAttr(execution_thread)));
       function->setAttr("execution_thread",
                         builder_->getStringAttr(execution_thread));
-      auto group_id = async_op->async_group_id();
-      if (group_id) {
-        attributes.push_back(builder_->getNamedAttr(
-            "group_id", builder_->getI64IntegerAttr(*group_id)));
-      }
 
       if (instruction->opcode() == HloOpcode::kAsyncStart) {
         auto bundle_result_type = mlir::mhlo::AsyncBundleType::get(
@@ -916,7 +916,7 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
           instruction->source_target_pairs(), builder_));
       return ImportOldStyleAsyncStart<mlir::mhlo::CollectivePermuteOp>(
           attributes, operands, loc, result_type, func_builder,
-          "collective_permute_", [&](auto) { return ::tsl::OkStatus(); });
+          "collective_permute_", [&](auto) { return absl::OkStatus(); });
     }
     case HloOpcode::kCollectivePermuteDone: {
       return ImportOldStyleAsyncDone(attributes, operands, loc, result_type,
@@ -1267,7 +1267,7 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
       }
       return ImportOldStyleAsyncStart<mlir::mhlo::CopyOp>(
           attributes, operands, loc, result_type, func_builder, "copy_",
-          [](auto) { return ::tsl::OkStatus(); });
+          [](auto) { return absl::OkStatus(); });
     }
     case HloOpcode::kCopyDone: {
       return ImportOldStyleAsyncDone(attributes, operands, loc, result_type,
@@ -1427,6 +1427,12 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
     }
     case HloOpcode::kAllGather: {
       auto all_gather = Cast<HloAllGatherInstruction>(instruction);
+      auto result_tuple_ty = result_type.dyn_cast<mlir::TupleType>();
+
+      llvm::SmallVector<Type> result_types = {result_type};
+      if (result_tuple_ty) {
+        result_types = llvm::to_vector(result_tuple_ty.getTypes());
+      }
       attributes.push_back(builder_->getNamedAttr(
           "all_gather_dim",
           builder_->getI64IntegerAttr(all_gather->all_gather_dimension())));
@@ -1437,10 +1443,15 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
             ConvertChannelHandle(all_gather->channel_id().value()));
       if (all_gather->use_global_device_ids())
         attributes.push_back(ConvertUseGlobalDeviceIds());
-      return func_builder
-          ->create<mlir::mhlo::AllGatherOp>(loc, result_type, operands,
-                                            attributes)
-          .getOperation();
+      auto all_gather_op = func_builder->create<mlir::mhlo::AllGatherOp>(
+          loc, result_types, operands, attributes);
+      if (result_tuple_ty) {
+        return func_builder
+            ->create<mlir::mhlo::TupleOp>(loc, result_type,
+                                          all_gather_op.getResults())
+            .getOperation();
+      }
+      return all_gather_op.getOperation();
     }
     case HloOpcode::kAllGatherStart: {
       auto all_gather_start = Cast<HloAllGatherInstruction>(instruction);
@@ -1454,10 +1465,13 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
             ConvertChannelHandle(all_gather_start->channel_id().value()));
       if (all_gather_start->use_global_device_ids())
         attributes.push_back(ConvertUseGlobalDeviceIds());
+      if (all_gather_start->operands().size() > 1)
+        return InvalidArgument(
+            "Async tuple all-gather is not supported in MHLO");
 
       return ImportOldStyleAsyncStart<mlir::mhlo::AllGatherOp>(
           attributes, operands, loc, result_type, func_builder, "all_gather_",
-          [](auto) { return ::tsl::OkStatus(); });
+          [](auto) { return absl::OkStatus(); });
     }
     case HloOpcode::kAllGatherDone: {
       return ImportOldStyleAsyncDone(attributes, operands, loc, result_type,
@@ -1511,7 +1525,7 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
             TF_RETURN_IF_ERROR(ImportAsRegion(
                 *instruction->to_apply(), &all_reduce_sync.getComputation(),
                 /*flatten_region_arg_tuple=*/true));
-            return ::tsl::OkStatus();
+            return absl::OkStatus();
           });
     }
     case HloOpcode::kAllReduceDone: {
@@ -2003,6 +2017,7 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstructionImpl(
       NO_ATTRIBUTE_CASE(kReplicaId, ReplicaIdOp);
       NO_ATTRIBUTE_CASE(kStochasticConvert, StochasticConvertOp);
       NO_ATTRIBUTE_CASE(kLogistic, LogisticOp);
+      NO_ATTRIBUTE_CASE(kErf, ErfOp);
       // The dimensions attribute is not present on the HLO Reshape
       // instruction. If dimensions are non-default, the XLA builder
       // implements it as a separate transpose.
@@ -2143,7 +2158,7 @@ Status HloFunctionImporter::GetMlirTypes(
                                            instruction->shape(), *builder_));
     types->push_back(ret_type);
   }
-  return ::tsl::OkStatus();
+  return absl::OkStatus();
 }
 
 StatusOr<Value> HloFunctionImporter::GetMlirValue(
@@ -2298,7 +2313,7 @@ Status HloFunctionImporter::ConvertShapeToMlirLayout(
     const xla::Shape& shape,
     llvm::SmallVectorImpl<mlir::Attribute>& flattened_attr) {
   if (shape.IsToken()) {
-    return ::tsl::OkStatus();
+    return absl::OkStatus();
   }
   if (shape.IsTuple()) {
     std::vector<mlir::Attribute> tuple_layouts;
@@ -2306,7 +2321,7 @@ Status HloFunctionImporter::ConvertShapeToMlirLayout(
       TF_RETURN_IF_ERROR(
           ConvertShapeToMlirLayout(shape.tuple_shapes(i), flattened_attr));
     }
-    return ::tsl::OkStatus();
+    return absl::OkStatus();
   }
   if (shape.IsArray()) {
     const xla::Layout l = shape.layout();
@@ -2316,7 +2331,7 @@ Status HloFunctionImporter::ConvertShapeToMlirLayout(
     }
     llvm::ArrayRef<mlir::Attribute> array_ref(minor_to_major);
     flattened_attr.push_back(builder_->getArrayAttr(array_ref));
-    return ::tsl::OkStatus();
+    return absl::OkStatus();
   }
   return Internal("Couldn't convert layout.");
 }

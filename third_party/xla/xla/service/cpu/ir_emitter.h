@@ -1,4 +1,4 @@
-/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -195,7 +195,8 @@ class IrEmitter : public DfsHloVisitorWithDefault,
   Status HandleAllReduceSingleReplica(HloInstruction* crs);
   Status HandleAllReduceMultipleReplica(HloInstruction* crs);
 #if defined(INTEL_MKL) && defined(ENABLE_ONEDNN_V3)
-  Status HandleOneDnnMatMul(HloInstruction* hlo);
+  Status HandleOneDnnMatMulCalls(HloInstruction* hlo,
+                                 std::string runtime_symbol_name);
   Status HandleOneDnnSoftmax(HloInstruction* hlo);
   Status HandleOneDnnLayerNorm(HloInstruction* hlo);
 #endif  // INTEL_MKL && ENABLE_ONEDNN_V3

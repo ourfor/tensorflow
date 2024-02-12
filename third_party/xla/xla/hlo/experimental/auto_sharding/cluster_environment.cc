@@ -1,4 +1,4 @@
-/* Copyright 2022 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2022 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -118,19 +118,6 @@ double ClusterEnvironment::AllToAllCost(double num_bytes, int mesh_dim) const {
   int64_t num_devices = device_mesh_.dim(mesh_dim);
   return AllToAllCostUtil(num_bytes, mesh_dim, num_devices, mesh_alpha_,
                           mesh_beta_);
-}
-
-double ClusterEnvironment::DotCost(const Shape& lhs_shape,
-                                   const Shape& rhs_shape) const {
-  if (!auto_sharding_option_.allow_recompute_heavy_op) {
-    return kInfinityCost;
-  }
-
-  // TODO(zhuohan): When profiling data is not available, it is not easy to
-  // align the scale of compute cost and communication cost. Here we just use
-  // a simple heuristic to compute the compute cost with communication cost.
-  double num_bytes = GetBytes(lhs_shape) + GetBytes(rhs_shape);
-  return AllReduceCost(num_bytes, 0) + AllReduceCost(num_bytes, 1);
 }
 
 double ClusterEnvironment::CollectivePermuteCost(

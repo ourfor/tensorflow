@@ -1,4 +1,4 @@
-/* Copyright 2023 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2023 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ limitations under the License.
 #include <cstdint>
 #include <utility>
 
+#include "absl/status/statusor.h"
 #include "xla/primitive_util.h"
 #include "xla/stream_executor/blas.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/util.h"
-#include "tsl/platform/statusor.h"
 #if GOOGLE_CUDA
 #include "tsl/platform/tensor_float_32_utils.h"
 #endif
@@ -35,7 +35,7 @@ using blas::ComputationType;
 using blas::DataType;
 using xla::PrimitiveType;
 
-tsl::StatusOr<DataType> AsBlasDataType(PrimitiveType dtype) {
+absl::StatusOr<DataType> AsBlasDataType(PrimitiveType dtype) {
   switch (dtype) {
     case PrimitiveType::F8E5M2:
       return DataType::kF8E5M2;
@@ -58,13 +58,13 @@ tsl::StatusOr<DataType> AsBlasDataType(PrimitiveType dtype) {
     case PrimitiveType::C128:
       return DataType::kComplexDouble;
     default:
-      return xla::InternalError(
+      return xla::Internal(
           "AsBlasDataType: unsupported type: %s",
           xla::primitive_util::LowercasePrimitiveTypeName(dtype));
   }
 }
 
-tsl::StatusOr<PrimitiveType> AsXlaPrimitiveType(DataType dtype) {
+absl::StatusOr<PrimitiveType> AsXlaPrimitiveType(DataType dtype) {
   switch (dtype) {
     case DataType::kF8E5M2:
       return PrimitiveType::F8E5M2;
@@ -87,7 +87,7 @@ tsl::StatusOr<PrimitiveType> AsXlaPrimitiveType(DataType dtype) {
     case DataType::kComplexDouble:
       return PrimitiveType::C128;
     default:
-      return xla::InternalError("AsXlaPrimitiveType: unsupported dtype");
+      return xla::Internal("AsXlaPrimitiveType: unsupported dtype");
   }
 }
 
@@ -120,7 +120,7 @@ void MatrixLayout::Transpose() {
   order = (order == Order::kRowMajor) ? Order::kColumnMajor : Order::kRowMajor;
 }
 
-tsl::StatusOr<ComputationType> GetBlasComputationType(
+absl::StatusOr<ComputationType> GetBlasComputationType(
     PrimitiveType lhs_dtype, PrimitiveType output_dtype,
     int64_t compute_precision) {
   switch (output_dtype) {
@@ -147,7 +147,7 @@ tsl::StatusOr<ComputationType> GetBlasComputationType(
     case PrimitiveType::S32:
       return ComputationType::kI32;
     default:
-      return xla::InternalError("GetBlasComputationType: unsupported type");
+      return xla::Internal("GetBlasComputationType: unsupported type");
   }
 }
 
@@ -173,10 +173,10 @@ bool MakeOutputColumnMajor(MatrixLayout& lhs, MatrixLayout& rhs,
 
 /*static*/ auto BlasLt::GetMatmulPlan(const Stream* stream,
                                       const GemmConfig& cfg, Epilogue epilogue)
-    -> tsl::StatusOr<MatmulPlanPtr> {
+    -> absl::StatusOr<MatmulPlanPtr> {
   auto blas = Get(stream);
   if (blas == nullptr) {
-    return xla::InternalError("BlasLt is unavailable");
+    return xla::Internal("BlasLt is unavailable");
   }
   return blas->GetMatmulPlan(cfg, epilogue);
 }

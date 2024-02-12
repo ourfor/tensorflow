@@ -18,6 +18,7 @@ limitations under the License.
 #include <cstdint>
 #include <type_traits>
 
+#include "llvm/Support/Debug.h"
 #include "mlir/IR/Builders.h"  // from @llvm-project
 #include "mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/IR/Matchers.h"  // from @llvm-project
@@ -25,6 +26,7 @@ limitations under the License.
 #include "mlir/IR/TypeUtilities.h"  // from @llvm-project
 #include "mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/Support/LLVM.h"  // from @llvm-project
+#include "mlir/Support/LogicalResult.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/quantization/tensorflow/quantization_options.pb.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
 
@@ -131,6 +133,41 @@ bool AreSplatValuesEqual(Value x, Value y) {
 // Clones an operation with new operands while keeping attributes.
 SmallVector<Value> CloneOpWithReplacedOperands(
     OpBuilder &builder, Operation *op, const SmallVector<Value> &new_operands);
+
+// Tries casting `op` with a concrete op type `T`. If the cast fails or `op` is
+// a `nullptr`, returns `failure` and prints a debugging message identifying
+// the cast attempt as `name`.
+template <typename T>
+FailureOr<T> TryCast(Operation *op, const StringRef name) {
+  auto cast_op = dyn_cast_or_null<T>(op);
+  if (cast_op) {
+    return cast_op;
+  } else {
+    DEBUG_WITH_TYPE("mlir-quant-attrs-and-constraints",
+                    llvm::dbgs() << "Failed to match " << name << " ("
+                                 << T::getOperationName() << ").\n");
+    return failure();
+  }
+}
+
+FailureOr<int32_t> CastI64ToI32(int64_t value);
+
+// Tries to cast an array of int64 to int32. If any of the element in the
+// array is not in the range of int32, returns failure().
+FailureOr<SmallVector<int32_t>> CastI64ArrayToI32(
+    ArrayRef<int64_t> int64_array);
+
+// Returns the first user of the given operation, optionally of the given
+// type if provided. If there is no user or user of type, return nullptr.
+template <typename T = Operation *>
+Operation *FindUserOfType(Operation *op) {
+  for (Operation *user : op->getUsers()) {
+    if (isa<T>(user)) {
+      return user;
+    }
+  }
+  return nullptr;
+}
 
 }  // namespace mlir::quant
 

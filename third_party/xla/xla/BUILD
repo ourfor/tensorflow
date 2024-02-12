@@ -48,7 +48,9 @@ package_group(
 )
 
 exports_files(
-    ["run_lit.sh"],
+    [
+        "lit.cfg.py",
+    ],
     visibility = ["//visibility:public"],
 )
 
@@ -306,7 +308,9 @@ cc_library(
     hdrs = ["status.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "@local_tsl//tsl/platform:status",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -1224,15 +1228,6 @@ cc_library(
     ],
 )
 
-filegroup(
-    name = "litfiles",
-    srcs = [
-        "runlit.cfg.py",
-        "runlit.site.cfg.py",
-    ],
-    visibility = ["//visibility:public"],
-)
-
 # -----------------------------------------------------------------------------
 
 # copybara:uncomment_begin(google-only)
@@ -1247,7 +1242,7 @@ filegroup(
 #     name = "xla_py_pb2",
 #     testonly = 0,
 #     api_version = 2,
-#     compatible_with = ["//buildenv/target:gce"],
+#     compatible_with = ["//buildenv/target:non_prod"],
 #     visibility = [":friends"],
 #     deps = [":xla_proto"],
 # )

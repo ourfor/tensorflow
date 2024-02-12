@@ -1,4 +1,4 @@
-/* Copyright 2022 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2022 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ xla::Status SetPjrtApi(absl::string_view device_type, const PJRT_Api* api) {
   (*pjrt_apis)[canonicalize_device_type] =
       std::make_pair(api, /*is_initialized=*/false);
   LOG(INFO) << "PJRT_Api is set for device type " << canonicalize_device_type;
-  return tsl::OkStatus();
+  return absl::OkStatus();
 }
 
 typedef const PJRT_Api* (*PjrtApiInitFn)();

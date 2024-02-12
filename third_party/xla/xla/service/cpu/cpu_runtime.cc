@@ -1,4 +1,4 @@
-/* Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2017 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -164,6 +164,8 @@ extern const char* const kOneDnnSoftmaxSymbolName =
     "__xla_cpu_runtime_OneDnnSoftmax";
 extern const char* const kOneDnnLayerNormSymbolName =
     "__xla_cpu_runtime_OneDnnLayerNorm";
+extern const char* const kOneDnnMatMulReorderSymbolName =
+    "__xla_cpu_runtime_OneDnnMatMulReorder";
 
 namespace {
 

@@ -63,9 +63,11 @@ filegroup(
         "device_options.h",
         "event.h",
         "executor_cache.h",
+        "host_memory_allocation.h",
         "kernel.h",
         "kernel_spec.h",
         "launch_dim.h",
+        "memory_allocation.h",
         "module_spec.h",
         "multi_platform_manager.h",
         "numeric_options.h",
@@ -73,8 +75,6 @@ filegroup(
         "scratch_allocator.h",
         "stream.h",
         "stream_executor.h",
-        "temporary_device_memory.h",
-        "temporary_memory_manager.h",
     ],
     visibility = ["//visibility:public"],
 )
@@ -130,6 +130,8 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = STREAM_EXECUTOR_DEPENDENCIES + [
         ":stream_executor_pimpl",
+        "@com_google_absl//absl/status:statusor",
+        "@local_tsl//tsl/platform:thread_annotations",
     ] + if_static([
         ":stream_executor_impl",
         "@com_google_protobuf//:protobuf",  # indirectly-used by dnn.h
@@ -180,7 +182,16 @@ cc_library(
     ],
 )
 
-# TODO(ezhulenev): Merge this target into `stream_executor`.
+cc_library(
+    name = "data_type",
+    hdrs = ["data_type.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@local_tsl//tsl/platform:ml_dtypes",
+        "@local_tsl//tsl/protobuf:dnn_proto_cc",
+    ],
+)
+
 cc_library(
     name = "device_memory_allocator",
     hdrs = ["device_memory_allocator.h"],
@@ -189,11 +200,11 @@ cc_library(
         ":device_memory",
         ":platform",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -204,6 +215,17 @@ cc_library(
     deps = [
         "@com_google_absl//absl/strings",
         "@local_tsl//tsl/platform:logging",
+    ],
+)
+
+cc_library(
+    name = "host_memory_allocation",
+    srcs = ["host_memory_allocation.cc"],
+    hdrs = ["host_memory_allocation.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":memory_allocation",
+        ":stream_executor_internal",  # TODO(b/323534971): Remove dependency on Interface.
     ],
 )
 
@@ -222,6 +244,12 @@ cc_library(
 )
 
 cc_library(
+    name = "memory_allocation",
+    hdrs = ["memory_allocation.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "multi_platform_manager",
     srcs = ["multi_platform_manager.cc"],
     hdrs = ["multi_platform_manager.h"],
@@ -231,11 +259,12 @@ cc_library(
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
     ],
 )
@@ -256,8 +285,7 @@ cc_library(
         ":device_options",
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/status",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -275,11 +303,13 @@ cc_library(
     hdrs = ["blas.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":stream_executor_headers",
+        ":data_type",
+        ":device_memory",
+        ":numeric_options",
         "//xla/stream_executor/platform",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
-        "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/protobuf:dnn_proto_cc",
     ],
 )
@@ -290,14 +320,16 @@ cc_library(
     hdrs = ["dnn.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":data_type",
         ":device_description_proto_cc",
         ":device_memory",
         ":numeric_options",
-        ":stream_executor_headers",
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
@@ -325,6 +357,9 @@ cc_library(
     deps = [
         ":stream_executor_headers",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -354,10 +389,9 @@ cc_library(
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -378,7 +412,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = STREAM_EXECUTOR_DEPENDENCIES + if_static([
         "@com_google_protobuf//:protobuf",  # indirectly-used by dnn.h
-    ]),
+    ]) + [
+        "@com_google_absl//absl/status:statusor",
+        "@local_tsl//tsl/platform:thread_annotations",
+    ],
 )
 
 cc_library(
@@ -392,10 +429,10 @@ cc_library(
         ":fft",
         ":platform",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
-        "@local_tsl//tsl/platform:status",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -435,8 +472,8 @@ cc_library(
         ":stream_executor_internal",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@local_tsl//tsl/platform:errors",
-        "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
     ],
 )
@@ -450,7 +487,7 @@ cc_library(
         ":stream_executor_headers",
         ":stream_executor_internal",
         "//xla/stream_executor/platform",
-        "@local_tsl//tsl/platform:status",
+        "@com_google_absl//absl/status",
     ],
 )
 
@@ -466,10 +503,10 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -480,10 +517,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//xla/stream_executor/platform",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -494,14 +531,18 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":device_memory",
+        ":kernel_spec",
         ":platform",
         ":stream_executor_headers",
         ":stream_executor_internal",
         "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/meta:type_traits",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:platform_port",
         "@local_tsl//tsl/platform:statusor",
@@ -513,35 +554,11 @@ cc_library(
     hdrs = ["scratch_allocator.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":device_memory_allocator",
         ":stream_executor_headers",
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/container:inlined_vector",
-        "@local_tsl//tsl/platform:statusor",
-    ],
-)
-
-cc_library(
-    name = "temporary_device_memory",
-    srcs = ["temporary_device_memory.cc"],
-    hdrs = ["temporary_device_memory.h"],
-    visibility = ["//visibility:public"],
-    deps = [":stream_executor_headers"],
-)
-
-cc_library(
-    name = "temporary_memory_manager",
-    srcs = ["temporary_memory_manager.cc"],
-    hdrs = ["temporary_memory_manager.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":stream_executor_headers",
-        ":temporary_device_memory",  # build_cleaner: keep
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/synchronization",
-        "@local_tsl//tsl/platform:logging",
-        "@local_tsl//tsl/platform:status",
+        "@com_google_absl//absl/status:statusor",
         "@local_tsl//tsl/platform:statusor",
     ],
 )
@@ -550,6 +567,7 @@ cc_library(
 
 transitive_hdrs(
     name = "stream_executor_install_hdrs",
+    tags = ["avoid_dep"],
     deps = [":stream_executor_headers"],
 )
 
@@ -563,20 +581,23 @@ cc_library(
         "stream_executor_pimpl.cc",
     ],
     hdrs = ["stream_executor_pimpl.h"],
+    tags = ["avoid_dep"],
     visibility = ["//visibility:public"],
     deps = [
         ":blas",  # build_cleaner: keep
         ":command_buffer",  # build_cleaner: keep
         ":dnn",  # build_cleaner: keep
         ":fft",
+        ":host_memory_allocation",
         ":kernel_spec",
         ":platform",
         ":stream_executor_headers",
         ":stream_executor_internal",
-        ":temporary_memory_manager",  # build_cleaner: keep
         "//xla/stream_executor/platform",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
@@ -586,7 +607,6 @@ cc_library(
         "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:stacktrace",
-        "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/protobuf:dnn_proto_cc",
         "@local_tsl//tsl/util:env_var",
@@ -616,8 +636,6 @@ cc_library(
         ":scratch_allocator",
         ":stream_executor_headers",
         ":stream_executor_pimpl",
-        ":temporary_device_memory",
-        ":temporary_memory_manager",
         "@local_tsl//tsl/protobuf:dnn_proto_cc_impl",
     ],
 )
@@ -635,6 +653,18 @@ xla_cc_test(
         "//xla/stream_executor/host:host_platform",
         "@local_tsl//tsl/platform:test",
         "@local_tsl//tsl/platform:test_benchmark",
+        "@local_tsl//tsl/platform:test_main",
+    ],
+)
+
+xla_cc_test(
+    name = "stream_executor_test",
+    srcs = ["stream_executor_test.cc"],
+    deps = [
+        ":stream_executor",
+        "//xla/stream_executor/host:host_platform",
+        "@local_tsl//tsl/platform:statusor",
+        "@local_tsl//tsl/platform:test",
         "@local_tsl//tsl/platform:test_main",
     ],
 )

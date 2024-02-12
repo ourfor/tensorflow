@@ -35,11 +35,29 @@ def TestPostCalibrationComponentPass : Pass<"stablehlo-test-post-calibration-com
   let description = [{
     Runs the post-calibration passes for post-training quantization.
   }];
+  let options = [
+    Option<"unpack_quantized_types_", "unpack-quantized-types", "bool",
+      /*default=*/"true", "Unpacks ops with uniform quantized types into "
+      "operations without uniform quantized types (mostly i8 or i32).">
+  ];
   let dependentDialects = [
     "mlir::stablehlo::StablehloDialect", "mlir::TF::TensorFlowDialect",
     "mlir::func::FuncDialect", "mlir::mhlo::MhloDialect",
     "mlir::quant::QuantizationDialect", "mlir::chlo::ChloDialect",
     "mlir::vhlo::VhloDialect", "mlir::shape::ShapeDialect",
     "mlir::quantfork::QuantizationForkDialect",
+  ];
+}
+
+def TestTFToStablehloPass : Pass<"stablehlo-test-tf-to-stablehlo", "mlir::ModuleOp"> {
+  let summary = "Test-only pass to test TFToStablehloPasses.";
+  let description = [{
+    Runs the TFToStablehloPasses.
+  }];
+  let dependentDialects = [
+    "mlir::stablehlo::StablehloDialect", "mlir::TF::TensorFlowDialect",
+    "mlir::chlo::ChloDialect", "mlir::quant::QuantizationDialect",
+    "mlir::mhlo::MhloDialect", "mlir::shape::ShapeDialect",
+    "mlir::sparse_tensor::SparseTensorDialect", "mlir::vhlo::VhloDialect",
   ];
 }

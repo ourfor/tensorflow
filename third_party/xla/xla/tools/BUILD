@@ -442,13 +442,13 @@ cc_library(
         "//xla:debug_options_flags",
         "//xla:statusor",
         "//xla/hlo/ir:hlo",
+        "//xla/service:hlo_module_config",
         "//xla/service:hlo_parser",
         "@com_google_absl//absl/strings",
         "@local_tsl//tsl/platform:env",
         "@local_tsl//tsl/platform:logging",
         "@local_tsl//tsl/platform:path",
         "@local_tsl//tsl/platform:protobuf",
-        "@local_tsl//tsl/platform:regexp",
     ],
 )
 
@@ -498,6 +498,21 @@ xla_py_proto_library(
     api_version = 2,
     visibility = ["//visibility:public"],
     deps = [":run_hlo_module_proto"],
+)
+
+cc_library(
+    name = "hlo_decomposer_lib",
+    srcs = ["hlo_decomposer.cc"],
+    hdrs = ["hlo_decomposer.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//xla:status",
+        "//xla/hlo/ir:hlo",
+        "//xla/service:call_graph",
+        "//xla/service:compilation_environments",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@local_tsl//tsl/platform:statusor",
+    ],
 )
 
 cc_library(
@@ -713,5 +728,20 @@ xla_test(
         "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/platform:test",
         "@local_tsl//tsl/protobuf:error_codes_proto_impl_cc",
+    ],
+)
+
+xla_test(
+    name = "hlo_decomposer_test",
+    srcs = ["hlo_decomposer_test.cc"],
+    deps = [
+        ":hlo_decomposer_lib",
+        "//xla/hlo/ir:hlo",
+        "//xla/tests:filecheck",
+        "//xla/tests:hlo_test_base",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )

@@ -1,4 +1,4 @@
-/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2015 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,17 +17,19 @@ limitations under the License.
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
-#include <utility>
 
+#include "absl/memory/memory.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "xla/stream_executor/platform.h"
 #include "xla/stream_executor/stream_executor.h"
 #include "xla/stream_executor/stream_executor_internal.h"
 #include "tsl/platform/demangle.h"
-#include "tsl/platform/statusor.h"
+#include "tsl/platform/errors.h"
 
 namespace stream_executor {
 
@@ -51,13 +53,11 @@ void KernelMetadata::set_shared_memory_bytes(int shared_memory_bytes) {
 // Kernel
 //===----------------------------------------------------------------------===//
 
-Kernel::Kernel(Kernel &&from)
-    : parent_(from.parent_),
-      implementation_(std::move(from.implementation_)),
-      name_(std::move(from.name_)),
-      demangled_name_(std::move(from.demangled_name_)),
-      metadata_(from.metadata_) {
-  from.parent_ = nullptr;
+absl::StatusOr<std::unique_ptr<Kernel>> Kernel::Create(
+    StreamExecutor *executor, const MultiKernelLoaderSpec &spec) {
+  auto kernel = absl::WrapUnique(new Kernel(executor));
+  TF_RETURN_IF_ERROR(executor->GetKernel(spec, kernel.get()));
+  return kernel;
 }
 
 Kernel::Kernel(StreamExecutor *parent)
@@ -80,7 +80,7 @@ KernelCacheConfig Kernel::GetPreferredCacheConfig() const {
   return implementation_->GetPreferredCacheConfig();
 }
 
-tsl::StatusOr<int32_t> Kernel::GetMaxOccupiedBlocksPerCore(
+absl::StatusOr<int32_t> Kernel::GetMaxOccupiedBlocksPerCore(
     ThreadDim threads, size_t dynamic_shared_memory_bytes) const {
   return implementation_->GetMaxOccupiedBlocksPerCore(
       threads, dynamic_shared_memory_bytes);
